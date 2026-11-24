@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use itztli_backend::{CommandError, CommandResult, ErrorCode, VaultInfo};
+use itztli_backend::{CommandError, CommandResult, ErrorCode, VaultInfo, printable};
 use itztli_plugins::{PluginInfo, Scope};
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
@@ -16,7 +16,7 @@ fn pick_folder(app: &AppHandle, title: &str) -> CommandResult<Option<PathBuf>> {
     path.map_err(|e| CommandError::new(ErrorCode::InvalidArgument, e.to_string()))
 }
 
-fn ask(app: &AppHandle, title: &str, message: String, yes: &str, kind: MessageDialogKind) -> bool {
+pub(crate) fn ask(app: &AppHandle, title: &str, message: String, yes: &str, kind: MessageDialogKind) -> bool {
     app.dialog()
         .message(message)
         .title(title)
@@ -84,11 +84,6 @@ fn describe(info: &PluginInfo, development: bool) -> String {
     lines.join("\n")
 }
 
-/// A plugin names itself; its name must not be able to imitate the dialog.
-fn printable(text: &str) -> String {
-    text.chars().filter(|c| !c.is_control()).take(80).collect()
-}
-
 /// Installs a plugin from a folder. `None` when the user cancels.
 #[tauri::command]
 pub async fn plugin_install(app: AppHandle, backend: State<'_, Shared>) -> CommandResult<Option<PluginInfo>> {
@@ -115,15 +110,4 @@ pub async fn remote_images_set(app: AppHandle, backend: State<'_, Shared>, allow
         Ok(allowed)
     })
     .await
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn names_cannot_add_lines_to_the_dialog() {
-        assert_eq!(printable("Nice\n\nIt is safe\u{7}"), "NiceIt is safe");
-        assert_eq!(printable(&"x".repeat(500)).len(), 80);
-    }
 }

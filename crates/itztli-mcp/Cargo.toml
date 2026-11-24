@@ -1,0 +1,45 @@
+[package]
+name = "itztli-mcp"
+description = "The MCP server: tools over the open vault, who may use them, approvals and the audit log, and the stdio bridge to it."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+# `itztli_mcp::testing`: a server over a vault of its own, for tests.
+testing = ["dep:tempfile"]
+# `itztli_mcp::bridge`: `itztli mcp-bridge`, for clients that only launch
+# stdio servers.
+bridge = ["dep:reqwest", "tokio/io-std", "tokio/io-util"]
+
+[dependencies]
+axum.workspace = true
+base64.workspace = true
+chrono.workspace = true
+getrandom.workspace = true
+http.workspace = true
+itztli-backend.workspace = true
+itztli-core.workspace = true
+itztli-history.workspace = true
+itztli-index.workspace = true
+itztli-vault.workspace = true
+# The bridge's HTTP client. No TLS: the server is on loopback.
+reqwest = { workspace = true, optional = true }
+rmcp = { workspace = true, features = ["server", "macros", "transport-streamable-http-server"] }
+rusqlite.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tempfile = { workspace = true, optional = true }
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+
+[dev-dependencies]
+# Itself with `testing` and `bridge`, for the integration tests in tests/.
+itztli-mcp = { path = ".", features = ["testing", "bridge"] }
+reqwest.workspace = true
+rmcp = { workspace = true, features = ["client", "transport-streamable-http-client-reqwest"] }
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }

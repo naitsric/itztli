@@ -51,6 +51,8 @@ src/                 React UI
   search/            Search Everywhere, Find in Files, popups
   plugins/           the plugin host, and the `ctx` plugins work with
   builtin/           features of the app that are plugins
+  mcp/               the MCP server's UI: activity, clients and their access,
+                     the dialog that approves changes
   settings/          settings, their dialog and the keymap
 packages/plugin-api/ the plugin API's types: its contract
 examples/plugins/    plugins to learn from
@@ -62,6 +64,8 @@ crates/
   itztli-history/    local history (SQLite, outside the vault)
   itztli-plugins/    plugins on disk: manifests, consent, what may be loaded
   itztli-backend/    everything above behind one `call(command, args)`
+  itztli-mcp/        the MCP server: tools, access, approvals, audit log, and the
+                     stdio bridge to it (`itztli mcp-bridge`)
   itztli-devserver/  the backend over HTTP, for development and the e2e tests
 ```
 
@@ -109,6 +113,24 @@ plugin is guarded. Consent is bound to a fingerprint of the plugin's files,
 which are read once, checked and served from memory. The API's version is
 `API_VERSION` in `crates/itztli-plugins`: adding to the API is fine; changing
 what is there needs a new version that keeps running the old one.
+
+**MCP.** `crates/itztli-mcp` serves the open vault to MCP clients over
+Streamable HTTP on `127.0.0.1`, with the official SDK (rmcp). Each host gives
+it a `Host` and two commands: `mcp`, which looks and answers approvals, and
+`mcp_change`, which is everything that changes who may do what. A `Change` that
+gives a program more than it had comes with a `Question`, and the host asks it
+in a native dialog; `McpServer::change` is the only way to make one. A tool
+that reads implements `ReadTool`; one that writes implements `WriteTool`, whose
+`plan` works out the change the user sees, made later on exactly that. Every
+call leaves one row in the audit log, whatever happens to it. Its settings,
+clients and log are in `mcp.db`, in the app's data folder.
+
+Clients that only launch stdio servers run the app's own executable as
+`itztli mcp-bridge --port <port>`, with the token in `ITZTLI_MCP_TOKEN`.
+`src-tauri/src/main.rs` checks for it before building Tauri, so no window
+appears. To try the server without the desktop app, run `pnpm dev:web`, connect
+a client from the MCP tool window, and
+`claude mcp add --transport http itztli http://127.0.0.1:7413/mcp --header "Authorization: Bearer <token>"`.
 
 **Security model**: see [SECURITY.md](SECURITY.md).
 

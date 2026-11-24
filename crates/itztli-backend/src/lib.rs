@@ -24,7 +24,7 @@ use serde_json::{Value, json};
 pub use error::{CommandError, CommandResult, ErrorCode};
 pub use state::{Recent, State};
 use workspace::lock;
-pub use workspace::{Change, Origin, VaultInfo, Workspace};
+pub use workspace::{Change, IndexStatus, NoteTask, Origin, Usages, VaultInfo, Workspace};
 
 /// Names of the events the UI listens to.
 pub mod event {
@@ -32,8 +32,16 @@ pub mod event {
     pub const INDEX_READY: &str = "index-ready";
     pub const PLUGINS_CHANGED: &str = "plugins-changed";
     pub const CONFIG_CHANGED: &str = "config-changed";
+    /// What the MCP server (crates/itztli-mcp) reports.
+    pub const MCP: &str = "mcp";
     /// Something went wrong that nobody was waiting for.
     pub const WARNING: &str = "warning";
+}
+
+/// Text that names itself (a plugin, an MCP client, a folder), for a dialog
+/// that asks about it: it must not be able to imitate the dialog.
+pub fn printable(text: &str) -> String {
+    text.chars().filter(|c| !c.is_control()).take(80).collect()
 }
 
 /// Where events go: to the window, or to the development server's clients.
@@ -126,6 +134,11 @@ impl Backend {
             self.events.emit(event::WARNING, json!({ "message": format!("cannot remember this vault: {e}") }));
         }
         Ok(info)
+    }
+
+    /// The vaults the user opened, the last one first.
+    pub fn recents(&self) -> Vec<Recent> {
+        self.state.recents()
     }
 
     /// Opens a vault the user opened before, the only ones a command may ask for.

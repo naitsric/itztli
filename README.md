@@ -59,6 +59,13 @@ no format of its own: what you write is yours, and opens anywhere.
 - **A plugin that comes with a vault never runs on its own**, and one that
   changes is stopped until you review it.
 
+### Work with an assistant
+- **An [MCP](#let-an-assistant-use-your-notes) server built in**: Claude Code,
+  Claude Desktop, Cursor or any MCP client can search and read your notes, and
+  propose changes to them.
+- **You approve every change**, seeing the difference first, and everything an
+  assistant did is on record.
+
 ### Keep
 - **Local History**: what every note said before, for 30 days, kept on your
   computer and outside the vault.
@@ -78,7 +85,7 @@ Measured on a vault of 10,000 notes (37 MB), on an Apple Silicon Mac:
 | Type in it, per key                         |       2–3 ms |
 
 The index lives in memory and is rebuilt on opening, so it is never out of
-date. The app is 11 MB, on the system's own web view and a Rust core.
+date. The app is 13 MB, on the system's own web view and a Rust core.
 `cargo bench -p itztli-index` measures the index by itself.
 
 ## Keyboard
@@ -102,11 +109,79 @@ date. The app is 11 MB, on the system's own web view and a Rust core.
 | Move Statement                  | ⇧⌘↑ / ⇧⌘↓ |
 | Insert Template                 | ⌘J       |
 | Today's Note                    | ⇧⌘D      |
-| Tool windows                    | ⌘1 … ⌘8  |
+| Tool windows                    | ⌘1 … ⌘9  |
 | Hide All Tool Windows           | ⇧⌘F12    |
 
 Every action is in Find Action and can be given other keys in
 Settings → Keymap.
+
+## Let an assistant use your notes
+
+Itztli can share the open vault with an AI assistant: Claude Code, Claude
+Desktop, Cursor, VS Code or any [MCP](https://modelcontextprotocol.io) client.
+It is off until you turn it on.
+
+Run **Connect an MCP Client…** (⇧⌘A), give it a name and choose what it may do:
+**Read**, or **Write**, which lets it propose changes too. Itztli asks you once
+more, turns the server on, and shows the client's token, once, next to what to
+paste in each assistant.
+
+**Claude Code**, in a terminal:
+
+```sh
+claude mcp add --scope user --transport http itztli http://127.0.0.1:7413/mcp --header "Authorization: Bearer <TOKEN>"
+```
+
+**Cursor**, in `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "itztli": {
+      "url": "http://127.0.0.1:7413/mcp",
+      "headers": { "Authorization": "Bearer <TOKEN>" }
+    }
+  }
+}
+```
+
+**Claude Desktop** only launches local programs, so it runs Itztli's own
+bridge, which opens Itztli in the background if it isn't running. In Claude,
+open Settings → Developer → Edit Config, add this to
+`claude_desktop_config.json` and restart Claude:
+
+```json
+{
+  "mcpServers": {
+    "itztli": {
+      "command": "/Applications/Itztli.app/Contents/MacOS/itztli",
+      "args": ["mcp-bridge", "--port", "7413"],
+      "env": { "ITZTLI_MCP_TOKEN": "<TOKEN>" }
+    }
+  }
+}
+```
+
+| What it can do                                     | Tools |
+| -------------------------------------------------- | ----- |
+| See which vaults it may use                        | `list_vaults` |
+| Search and list: text, names, folders, tags        | `search_notes`, `list_notes`, `list_tags` |
+| Read a note or a section; its links and backlinks  | `read_note`, `describe_note` |
+| Tasks, and links that lead nowhere                 | `list_tasks`, `list_problems` |
+| Propose changes                                    | `create_note`, `edit_note`, `append_to_note`, `replace_note`, `move_note`, `delete_note` |
+
+**You approve every change.** Itztli comes to the front and shows who asks, the
+note, the difference, the assistant's reason, and which links a move rewrites or
+a deletion breaks. Reject has the focus, Enter never approves, and typing that
+was meant for a note answers nothing. A change is made only on what you saw: if
+the note changed meanwhile, it isn't. What it said before stays in Local History.
+
+**See everything it did.** The MCP tool window (⌘9) lists every call as it
+happens: what was read, searched or proposed, by whom, and whether you let it.
+What calls returned is never stored. Revoking a client stops its token at once.
+
+**What an assistant reads may leave your computer**: it sends it to the service
+behind it. Give access to the vaults that may.
 
 ## Coming from Obsidian
 

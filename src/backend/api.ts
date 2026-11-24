@@ -2,6 +2,7 @@
  * The backend's commands, typed. Their other side is
  * `crates/itztli-backend/src/commands.rs`.
  */
+import type { McpEvent } from "../mcp/api";
 import { host } from "./host";
 
 export interface CommandError {
@@ -185,7 +186,7 @@ export interface RelinkedNote {
 export interface Revision {
   id: number;
   at: number;
-  reason: "edit" | "refactor" | "delete";
+  reason: "edit" | "refactor" | "mcp" | "delete";
   size: number;
 }
 
@@ -245,6 +246,7 @@ export interface BackendEvents {
   "index-ready": IndexStatus;
   "plugins-changed": { folders: string[] };
   "config-changed": Record<string, never>;
+  mcp: McpEvent;
   warning: { message: string };
 }
 

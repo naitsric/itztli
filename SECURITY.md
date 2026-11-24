@@ -30,7 +30,28 @@ possible from the page, or are asked in a native dialog.
 The window's content policy also keeps plugins from the network, except for the
 origins in their manifest, which you see before enabling them.
 
+**What programs outside can do.** The MCP server is off until you turn it on,
+and listens on `127.0.0.1` only. It refuses web pages (any `Origin`) and hosts
+that are not this computer, and every request needs the token of a client you
+created; only its hash is kept. A client sees the vaults you gave it, only
+while they are open, and in them only notes: no attachments, no hidden folders.
+A change waits for you, with the difference in front, and is made on exactly
+what you saw or not at all. Every call is recorded.
+
+Turning the server on, giving a client access to a vault and making it a new
+token are asked in a native dialog, so a plugin can't do it for you.
+
 ## What it does not
+
+**An assistant can be misled, and can tell.** What a client reads goes wherever
+its program sends it. A note may hold text written to steer an assistant; its
+tools tell it not to follow it, which is no guarantee. Look at what a change
+does, not only at the reason given for it.
+
+**Approving is not out of a plugin's reach.** The dialog that approves a
+client's change is drawn in the page plugins share, so an enabled plugin could
+answer it, or read a new client's token as it is shown. It gains nothing it
+lacks: it can already read and change the same notes by itself.
 
 **The page is not a sandbox.** Plugins share it with the app and with each
 other: one can read what another keeps, or use the network access another was

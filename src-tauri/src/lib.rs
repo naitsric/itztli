@@ -3,6 +3,7 @@
 
 mod consent;
 mod files;
+mod mcp;
 mod menu;
 mod safe_mode;
 
@@ -42,6 +43,14 @@ async fn plugin_fetch(backend: State<'_, Shared>, token: String, request: net::R
     net::fetch(request, &origins).await
 }
 
+/// `itztli mcp-bridge [--port <port>]` (see main.rs): relays an MCP client's
+/// stdin and stdout to the app's MCP server, opening the app if it isn't
+/// running. Never starts the app in this process. Returns the exit code.
+pub fn mcp_bridge_main() -> i32 {
+    let args = std::env::args_os().skip(2).map(|arg| arg.to_string_lossy().into_owned());
+    itztli_mcp::bridge::main(args, mcp::BUNDLE_ID)
+}
+
 /// Ends the app. The UI calls it once every note is saved.
 #[tauri::command]
 fn app_quit(app: AppHandle) {
@@ -67,6 +76,7 @@ pub fn run() {
             let events = Arc::new(WindowEvents(app.handle().clone()));
             let backend = Backend::new(&data, events)?.with_safe_mode(safe_mode::requested(&data));
             app.manage::<Shared>(Arc::new(backend));
+            mcp::setup(app.handle(), &data);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -81,6 +91,8 @@ pub fn run() {
             files::entry_open,
             files::plugin_reveal,
             files::url_open,
+            mcp::mcp,
+            mcp::mcp_change,
             menu::menu_set,
             safe_mode::app_restart,
         ])

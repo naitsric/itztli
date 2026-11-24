@@ -23,6 +23,8 @@ pub enum Reason {
     Edit,
     /// Links rewritten because another file was renamed or moved.
     Refactor,
+    /// Changed through the MCP server, with the user's approval.
+    Mcp,
     Delete,
 }
 
@@ -31,6 +33,7 @@ impl Reason {
         match self {
             Self::Edit => "edit",
             Self::Refactor => "refactor",
+            Self::Mcp => "mcp",
             Self::Delete => "delete",
         }
     }
@@ -38,6 +41,7 @@ impl Reason {
     fn from_str(s: &str) -> Self {
         match s {
             "refactor" => Self::Refactor,
+            "mcp" => Self::Mcp,
             "delete" => Self::Delete,
             _ => Self::Edit,
         }
@@ -203,13 +207,14 @@ mod tests {
     }
 
     #[test]
-    fn refactors_and_deletions_always_count() {
+    fn only_the_users_own_edits_are_thinned_out() {
         let h = History::in_memory().unwrap();
         assert!(h.replacing("v", "a.md", "a", Some("b"), Reason::Edit, T).unwrap());
         assert!(h.replacing("v", "a.md", "b", Some("c"), Reason::Refactor, T + 1).unwrap());
-        assert!(h.replacing("v", "a.md", "c", None, Reason::Delete, T + 2).unwrap());
+        assert!(h.replacing("v", "a.md", "c", Some("d"), Reason::Mcp, T + 2).unwrap());
+        assert!(h.replacing("v", "a.md", "d", None, Reason::Delete, T + 3).unwrap());
         let reasons: Vec<Reason> = h.list("v", "a.md").unwrap().into_iter().map(|r| r.reason).collect();
-        assert_eq!(reasons, [Reason::Delete, Reason::Refactor, Reason::Edit]);
+        assert_eq!(reasons, [Reason::Delete, Reason::Mcp, Reason::Refactor, Reason::Edit]);
     }
 
     #[test]
