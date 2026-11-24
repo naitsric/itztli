@@ -1,0 +1,10 @@
+{
+  "id": "csv-table",
+  "name": "CSV Table",
+  "version": "1.0.0",
+  "api": 1,
+  "description": "Draws csv code blocks as tables, and opens .csv files as one. Click a column to sort.",
+  "author": "Itztli",
+  "main": "main.js",
+  "styles": "styles.css"
+}

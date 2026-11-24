@@ -1,0 +1,14 @@
+{
+  "id": "local-llm",
+  "name": "Local LLM",
+  "version": "1.0.0",
+  "api": 1,
+  "description": "Summarizes, rewrites and continues text with a model running on this computer (Ollama). Nothing leaves it.",
+  "author": "Itztli",
+  "main": "main.js",
+  "network": ["http://localhost:11434"],
+  "settings": [
+    { "key": "model", "title": "Model", "description": "As Ollama calls it.", "type": "string", "default": "llama3.2" },
+    { "key": "language", "title": "Answer in", "description": "Empty: in the language of the text.", "type": "string", "default": "" }
+  ]
+}

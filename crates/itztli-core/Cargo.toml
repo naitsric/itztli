@@ -1,0 +1,15 @@
+[package]
+name = "itztli-core"
+description = "Notes as data: paths, links, tags, headings and tasks. No file access."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+memchr.workspace = true
+pulldown-cmark.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde-saphyr.workspace = true
+thiserror.workspace = true
+unicode-normalization.workspace = true

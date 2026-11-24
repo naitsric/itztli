@@ -1,0 +1,28 @@
+[package]
+name = "itztli"
+description = "Keyboard-first notes: plain Markdown, linked, extensible"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+# The `_lib` suffix avoids a lib/bin name clash on Windows,
+# see https://github.com/rust-lang/cargo/issues/8519
+name = "itztli_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+itztli-backend.workspace = true
+itztli-plugins.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# macos-private-api: transparent window for the translucent frame (not Mac
+# App Store compatible; Itztli ships through GitHub releases).
+tauri = { version = "2", features = ["macos-private-api"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-window-state = "2"

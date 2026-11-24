@@ -1,0 +1,24 @@
+[package]
+name = "itztli-backend"
+description = "Everything behind the UI, independent of the window it runs in."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+base64.workspace = true
+itztli-core.workspace = true
+itztli-history.workspace = true
+itztli-index.workspace = true
+itztli-plugins.workspace = true
+itztli-vault.workspace = true
+rayon.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

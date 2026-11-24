@@ -1,0 +1,253 @@
+@import "tailwindcss";
+@import "./dockview-theme.css";
+@import "./markdown.css";
+
+/*
+ * Design tokens. Every color in the app (CSS, Tailwind classes, dockview,
+ * the editor and the canvas graph) resolves from these, and themes are
+ * changes to them. The resolved theme is set on <html data-theme> by
+ * src/theme.ts.
+ */
+:root {
+  --font-ui: "Inter Variable", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-code: "JetBrains Mono Variable", ui-monospace, "SF Mono", monospace;
+  --font-serif: ui-serif, "New York", Charter, Georgia, serif;
+
+  --titlebar-height: 40px;
+  --statusbar-height: 26px;
+  --stripe-width: 40px;
+  --traffic-lights-inset: 84px;
+  --island-gap: 5px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  /* The frame around the islands; see through with the translucent frame. */
+  --bg-window: var(--bg);
+  --bg-frame: var(--bg);
+}
+
+/*
+ * Translucent frame: the window is transparent over the macOS sidebar
+ * material (tauri.conf.json windowEffects). Only the frame lets it through,
+ * with a tint so text keeps its contrast; the islands stay opaque.
+ */
+:root[data-vibrancy="on"] {
+  --bg-window: transparent;
+  --bg-frame: var(--bg-frame-glass);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #e9eaee;
+  --bg-frame-glass: rgb(233 234 238 / 0.55);
+  --bg-panel: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-inset: #f5f6f8;
+  --bg-hover: rgb(20 25 40 / 0.055);
+  --bg-active: rgb(20 25 40 / 0.1);
+  --border: #e3e5ea;
+  --border-strong: #cfd2da;
+  --fg: #1e1f22;
+  --fg-muted: #565a66;
+  --fg-subtle: #8c909d;
+  --accent: #3574f0;
+  --accent-fg: #ffffff;
+  --accent-soft: rgb(53 116 240 / 0.13);
+  --selection: rgb(53 116 240 / 0.2);
+  --success: #208a3c;
+  --warning: #a46704;
+  --danger: #db3b4b;
+  --shadow-popover: 0 12px 32px rgb(0 0 0 / 0.16), 0 2px 6px rgb(0 0 0 / 0.08);
+  --shadow-island: 0 1px 2px rgb(20 25 40 / 0.06);
+
+  --link: #2f66d6;
+  --link-missing: #a46704;
+  --tag: #12806f;
+  --tag-bg: rgb(18 128 111 / 0.11);
+  --heading: #1e1f22;
+  --mark: rgb(255 205 60 / 0.5);
+
+  --syntax-keyword: #0033b3;
+  --syntax-string: #067d17;
+  --syntax-number: #1750eb;
+  --syntax-comment: #8c8c8c;
+  --syntax-function: #00627a;
+  --syntax-type: #7a3e9d;
+  --syntax-operator: #4b4f5a;
+  --syntax-identifier: #9a6700;
+  --editor-active-line: rgb(20 25 40 / 0.03);
+  --editor-flash: rgb(53 116 240 / 0.26);
+  --editor-match: rgb(245 190 10 / 0.35);
+  --editor-bracket: rgb(53 116 240 / 0.16);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #2a2c30;
+  --bg-frame-glass: rgb(38 40 44 / 0.62);
+  --bg-panel: #1c1d20;
+  --bg-elevated: #2b2d31;
+  --bg-inset: #17181a;
+  --bg-hover: rgb(255 255 255 / 0.06);
+  --bg-active: rgb(255 255 255 / 0.1);
+  --border: #323438;
+  --border-strong: #45484e;
+  --fg: #d9dce2;
+  --fg-muted: #a2a6af;
+  --fg-subtle: #70747d;
+  --accent: #4a86f7;
+  --accent-fg: #ffffff;
+  --accent-soft: rgb(74 134 247 / 0.2);
+  --selection: rgb(74 134 247 / 0.3);
+  --success: #5fb865;
+  --warning: #d6a64a;
+  --danger: #f0666f;
+  --shadow-popover: 0 16px 40px rgb(0 0 0 / 0.5), 0 2px 8px rgb(0 0 0 / 0.35);
+  --shadow-island: none;
+
+  --link: #6ea3ff;
+  --link-missing: #d6a64a;
+  --tag: #4cc3ad;
+  --tag-bg: rgb(76 195 173 / 0.13);
+  --heading: #eceef2;
+  --mark: rgb(235 190 60 / 0.3);
+
+  --syntax-keyword: #cf8e6d;
+  --syntax-string: #6aab73;
+  --syntax-number: #2aacb8;
+  --syntax-comment: #7a7e85;
+  --syntax-function: #56a8f5;
+  --syntax-type: #c77dbb;
+  --syntax-operator: #bcbec4;
+  --syntax-identifier: #d5b778;
+  --editor-active-line: rgb(255 255 255 / 0.032);
+  --editor-flash: rgb(74 134 247 / 0.32);
+  --editor-match: rgb(245 190 10 / 0.24);
+  --editor-bracket: rgb(74 134 247 / 0.25);
+}
+
+@theme inline {
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-code);
+  --color-bg: var(--bg);
+  --color-frame: var(--bg-frame);
+  --color-panel: var(--bg-panel);
+  --color-elevated: var(--bg-elevated);
+  --color-inset: var(--bg-inset);
+  --color-hover: var(--bg-hover);
+  --color-active: var(--bg-active);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-muted: var(--fg-muted);
+  --color-subtle: var(--fg-subtle);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-link: var(--link);
+  --color-tag: var(--tag);
+  --shadow-popover: var(--shadow-popover);
+  --shadow-island: var(--shadow-island);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+}
+
+/*
+ * Native-app chrome: no page scroll or rubber-banding, no selectable UI
+ * text, arrow cursor everywhere. Text stays selectable where it is content.
+ */
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html {
+  background: var(--bg-window);
+}
+
+body {
+  margin: 0;
+  background: var(--bg-window);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+input,
+textarea,
+[contenteditable],
+.selectable {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+button,
+a {
+  cursor: default;
+}
+
+::selection {
+  background: var(--selection);
+}
+
+/* In the base layer, so `outline-none` can take it off. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+}
+
+/* Thin overlay-style scrollbars, like the native ones. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+/* A rounded surface on the frame: the editor, or a tool window. */
+.island {
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-island);
+}
+
+/* Brief highlight of where a jump landed; see src/editor/flash.ts. */
+@keyframes itztli-flash {
+  from {
+    background-color: var(--editor-flash);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+@keyframes itztli-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

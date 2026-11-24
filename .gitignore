@@ -1,0 +1,27 @@
+# Logs
+logs
+*.log
+
+node_modules
+dist
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.sw?
+
+# Rust
+/target
+src-tauri/gen
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Test output
+coverage
+e2e/output

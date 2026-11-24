@@ -1,0 +1,19 @@
+[package]
+name = "itztli-index"
+description = "The vault's index: links, search and link-preserving moves, in memory."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+itztli-core.workspace = true
+memchr.workspace = true
+nucleo-matcher.workspace = true
+rayon.workspace = true
+regex.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[[bench]]
+name = "vault"
+harness = false

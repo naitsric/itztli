@@ -1,0 +1,137 @@
+/*
+ * How Markdown looks: while editing (the cm- classes put on by
+ * src/editor/livePreview.ts) and in previews (.markdown). Both read the same
+ * tokens, so a note looks alike in either.
+ */
+
+/* ── Editor ─────────────────────────────────────────────────────────────── */
+
+.cm-heading {
+  color: var(--heading);
+  font-weight: 650;
+  line-height: 1.35;
+}
+.cm-line.cm-h1 { font-size: 1.75em; font-weight: 700; padding-top: 0.5em; letter-spacing: -0.015em; }
+.cm-line.cm-h2 { font-size: 1.4em; padding-top: 0.6em; letter-spacing: -0.01em; }
+.cm-line.cm-h3 { font-size: 1.2em; padding-top: 0.5em; }
+.cm-line.cm-h4 { font-size: 1.07em; padding-top: 0.4em; }
+.cm-line.cm-h5, .cm-line.cm-h6 { font-size: 1em; padding-top: 0.4em; color: var(--fg-muted); }
+
+.cm-strong { font-weight: 680; color: var(--heading); }
+.cm-em { font-style: italic; }
+.cm-strike { text-decoration: line-through; color: var(--fg-muted); }
+.cm-mark { background: var(--mark); border-radius: 3px; padding: 1px 0; }
+.cm-inline-code {
+  font-family: var(--font-code);
+  font-size: 0.875em;
+  background: var(--bg-hover);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.cm-markup { color: var(--fg-subtle); font-weight: 400; }
+.cm-comment-text { color: var(--fg-subtle); }
+.cm-url { color: var(--fg-subtle); }
+
+.cm-link-text { color: var(--link); text-decoration: none; }
+.cm-link-text.cm-link-missing { color: var(--link-missing); }
+.cm-mod-held .cm-link-text { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.cm-tag { color: var(--tag); background: var(--tag-bg); border-radius: 10px; padding: 1px 7px; font-size: 0.9em; }
+.cm-mod-held .cm-tag { cursor: pointer; }
+
+/* Blocks line up with the text around them, and are set in from there. */
+.cm-line.cm-quote, .cm-line.cm-code-line, .cm-line.cm-frontmatter { margin: 0 var(--line-inset); padding-left: 14px !important; padding-right: 14px !important; }
+.cm-line.cm-quote { border-left: 3px solid var(--border-strong); color: var(--fg-muted); }
+.cm-line.cm-callout { border-left-color: var(--callout); background: color-mix(in srgb, var(--callout) 9%, transparent); color: var(--fg); }
+.cm-line.cm-callout-title { font-weight: 600; color: var(--callout); border-top-right-radius: 6px; }
+.cm-line.cm-callout-end { border-bottom-right-radius: 6px; }
+
+.cm-line.cm-code-line {
+  font-family: var(--font-code);
+  font-size: 0.875em;
+  line-height: 1.6;
+  background: var(--bg-inset);
+}
+.cm-line.cm-code-first { border-radius: 8px 8px 0 0; }
+.cm-line.cm-code-last { border-radius: 0 0 8px 8px; }
+.cm-line.cm-code-first.cm-code-last { border-radius: 8px; }
+
+.cm-line.cm-frontmatter { font-family: var(--font-code); font-size: 0.82em; line-height: 1.65; color: var(--fg-muted); background: var(--bg-inset); }
+.cm-line.cm-frontmatter-first { border-radius: 8px 8px 0 0; }
+.cm-line.cm-frontmatter-last { border-radius: 0 0 8px 8px; }
+
+/* As wide as the box a list marker gets while it shows (LIST_STEP_EM). */
+.cm-bullet { display: inline-block; min-width: 1.65em; padding-left: 0.28em; text-indent: 0; color: var(--fg-subtle); }
+.cm-task { appearance: none; -webkit-appearance: none; position: relative; display: inline-block; width: 15px; height: 15px; margin: 0 8px 0 1px; vertical-align: -2px; border: 1.5px solid var(--border-strong); border-radius: 4px; background: transparent; }
+.cm-task:checked { background: var(--accent); border-color: var(--accent); }
+.cm-task:checked::after { content: ""; position: absolute; left: 2px; top: 2.5px; width: 8px; height: 5px; border: solid var(--accent-fg); border-width: 0 0 2px 2px; transform: rotate(-45deg); }
+.cm-task-done { color: var(--fg-subtle); text-decoration: line-through; text-decoration-color: var(--border-strong); }
+
+.cm-rule { display: inline-block; width: 100%; height: 1px; vertical-align: middle; background: var(--border-strong); }
+.cm-embed-image { max-width: 100%; border-radius: 6px; display: block; }
+.cm-embed-missing { color: var(--fg-subtle); border: 1px dashed var(--border-strong); border-radius: 6px; padding: 6px 10px; font-size: 0.9em; display: inline-block; }
+.cm-embed-note { display: block; border-left: 3px solid var(--accent); background: var(--bg-inset); border-radius: 0 8px 8px 0; padding: 8px 14px; max-height: 420px; overflow: auto; }
+.cm-embed-title { font-size: 11.5px; color: var(--fg-subtle); margin-bottom: 4px; }
+.cm-block-widget { margin: 0 var(--line-inset); padding: 4px 0; overflow-x: auto; }
+
+.cm-block-widget { position: relative; }
+.cm-edit-block { position: absolute; top: 6px; right: 6px; padding: 1px 8px; border: 1px solid var(--border-strong); border-radius: 5px; background: var(--bg-elevated); color: var(--fg-muted); font-family: var(--font-ui); font-size: 11.5px; opacity: 0; transition: opacity 120ms; }
+.cm-block-widget:hover > .cm-edit-block, .cm-edit-block:focus-visible { opacity: 1; }
+.cm-edit-block:hover { color: var(--fg); }
+
+.cm-line.cm-heading { position: relative; }
+.cm-fold-toggle { position: absolute; left: 4px; width: 20px; text-align: center; font-size: 13px; font-weight: 400; color: var(--fg-subtle); opacity: 0; cursor: default; transition: opacity 120ms; }
+.cm-line:hover > .cm-fold-toggle, .cm-fold-toggle.cm-folded { opacity: 1; }
+.cm-fold-toggle:hover { color: var(--fg); }
+.cm-block-error { color: var(--danger); font-family: var(--font-code); font-size: 12px; white-space: pre-wrap; padding: 8px 12px; background: color-mix(in srgb, var(--danger) 8%, transparent); border-radius: 6px; }
+.cm-block-id { color: var(--fg-subtle); font-size: 0.8em; }
+
+.cm-flash { animation: itztli-flash 900ms ease-out; }
+
+/* ── Callout colors, shared ─────────────────────────────────────────────── */
+
+[data-callout] { --callout: var(--accent); }
+[data-callout="tip"], [data-callout="success"], [data-callout="check"], [data-callout="done"], [data-callout="hint"] { --callout: var(--success); }
+[data-callout="warning"], [data-callout="caution"], [data-callout="attention"], [data-callout="question"], [data-callout="help"], [data-callout="faq"] { --callout: var(--warning); }
+[data-callout="danger"], [data-callout="error"], [data-callout="bug"], [data-callout="failure"], [data-callout="fail"], [data-callout="missing"] { --callout: var(--danger); }
+[data-callout="quote"], [data-callout="cite"], [data-callout="example"], [data-callout="abstract"], [data-callout="summary"] { --callout: var(--fg-subtle); }
+
+/* ── Previews ───────────────────────────────────────────────────────────── */
+
+.markdown { white-space: normal; line-height: 1.65; overflow-wrap: break-word; -webkit-user-select: text; user-select: text; cursor: text; }
+.markdown > :first-child { margin-top: 0; }
+.markdown > :last-child { margin-bottom: 0; }
+.markdown h1, .markdown h2, .markdown h3, .markdown h4, .markdown h5, .markdown h6 { color: var(--heading); font-weight: 650; line-height: 1.3; margin: 1.3em 0 0.45em; }
+.markdown h1 { font-size: 1.75em; font-weight: 700; letter-spacing: -0.015em; }
+.markdown h2 { font-size: 1.4em; letter-spacing: -0.01em; }
+.markdown h3 { font-size: 1.2em; }
+.markdown h4 { font-size: 1.07em; }
+.markdown p, .markdown ul, .markdown ol, .markdown blockquote, .markdown pre, .markdown table, .markdown .callout { margin: 0.65em 0; }
+.markdown ul { list-style: disc; padding-left: 1.5em; }
+.markdown ol { list-style: decimal; padding-left: 1.6em; }
+.markdown li { margin: 0.15em 0; }
+.markdown li::marker { color: var(--fg-subtle); }
+.markdown li.task { list-style: none; margin-left: -1.5em; }
+.markdown li.task > input { margin: 0 0.5em 0 0; vertical-align: -1px; accent-color: var(--accent); }
+.markdown strong { font-weight: 680; color: var(--heading); }
+.markdown em { font-style: italic; }
+.markdown del { color: var(--fg-muted); }
+.markdown mark { background: var(--mark); color: inherit; border-radius: 3px; }
+.markdown code { font-family: var(--font-code); font-size: 0.875em; background: var(--bg-hover); border-radius: 4px; padding: 1px 4px; }
+.markdown pre { background: var(--bg-inset); border-radius: 8px; padding: 10px 14px; overflow-x: auto; line-height: 1.55; }
+.markdown pre code { background: none; padding: 0; }
+.markdown a { color: var(--link); text-decoration: none; cursor: pointer; }
+.markdown a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.markdown a.missing { color: var(--link-missing); }
+.markdown a.tag { color: var(--tag); background: var(--tag-bg); border-radius: 10px; padding: 1px 7px; font-size: 0.9em; }
+.markdown blockquote { border-left: 3px solid var(--border-strong); padding-left: 14px; color: var(--fg-muted); }
+.markdown hr { border: none; border-top: 1px solid var(--border-strong); margin: 1.5em 0; }
+.markdown img { max-width: 100%; border-radius: 6px; }
+.markdown table { border-collapse: collapse; font-size: 0.95em; }
+.markdown th, .markdown td { border: 1px solid var(--border); padding: 4px 10px; text-align: left; }
+.markdown th { background: var(--bg-inset); font-weight: 600; }
+.markdown td[align="right"], .markdown th[align="right"] { text-align: right; }
+.markdown td[align="center"], .markdown th[align="center"] { text-align: center; }
+.markdown .callout { border-left: 3px solid var(--callout); background: color-mix(in srgb, var(--callout) 9%, transparent); border-radius: 0 8px 8px 0; padding: 8px 14px; }
+.markdown .callout-title { font-weight: 600; color: var(--callout); }
+.markdown .callout > :last-child { margin-bottom: 0; }
+.markdown .remote-image { display: inline-block; color: var(--fg-subtle); border: 1px dashed var(--border-strong); border-radius: 6px; padding: 6px 10px; font-size: 0.9em; }

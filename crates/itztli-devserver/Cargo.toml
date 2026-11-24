@@ -1,0 +1,15 @@
+[package]
+name = "itztli-devserver"
+description = "The backend over local HTTP, to run the UI in a browser. For development only."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+axum.workspace = true
+futures-util = { version = "0.3", default-features = false }
+itztli-backend.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true

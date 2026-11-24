@@ -1,0 +1,9 @@
+{
+  "id": "volcan-theme",
+  "name": "Volcán Theme",
+  "version": "1.0.0",
+  "api": 1,
+  "description": "A warm dark theme, and a light one on paper.",
+  "author": "Itztli",
+  "main": "main.js"
+}

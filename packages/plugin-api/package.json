@@ -1,0 +1,12 @@
+{
+  "name": "@itztli/plugin-api",
+  "version": "1.0.0",
+  "description": "Types of Itztli's plugin API.",
+  "license": "MIT",
+  "types": "index.d.ts",
+  "files": ["index.d.ts", "esbuild.mjs"],
+  "exports": {
+    ".": { "types": "./index.d.ts" },
+    "./esbuild": "./esbuild.mjs"
+  }
+}

@@ -1,0 +1,5 @@
+.csv-table { border-collapse: collapse; font-size: 13px; }
+.csv-table th, .csv-table td { border: 1px solid var(--border); padding: 4px 10px; text-align: left; }
+.csv-table th { background: var(--bg-inset); font-weight: 600; }
+.csv-table th:hover { background: var(--bg-hover); }
+.csv-file { padding: 16px; overflow: auto; }

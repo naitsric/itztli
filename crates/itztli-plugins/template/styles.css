@@ -1,0 +1,5 @@
+/* The app's colors are CSS variables, so this follows any theme. */
+.{{id}}-panel {
+  padding: 12px;
+  color: var(--fg-muted);
+}

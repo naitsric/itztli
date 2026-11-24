@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Itztli",
+  "version": "../package.json",
+  "identifier": "io.github.naitsric.itztli",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Itztli",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 800,
+        "minHeight": 520,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": { "x": 14, "y": 20 },
+        "acceptFirstMouse": true,
+        "dragDropEnabled": false,
+        "transparent": true,
+        "windowEffects": { "effects": ["sidebar"], "state": "followsWindowActiveState" }
+      }
+    ],
+    "macOSPrivateApi": true,
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' itztli-plugin: http://itztli-plugin.localhost; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: itztli-vault: http://itztli-vault.localhost itztli-remote: http://itztli-remote.localhost itztli-plugin: http://itztli-plugin.localhost; media-src 'self' itztli-vault: http://itztli-vault.localhost; font-src 'self' data: itztli-plugin: http://itztli-plugin.localhost; connect-src ipc: http://ipc.localhost itztli-plugin: http://itztli-plugin.localhost; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "category": "Productivity",
+    "shortDescription": "Keyboard-first notes: plain Markdown, linked, extensible",
+    "license": "MIT",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "13.0"
+    }
+  }
+}

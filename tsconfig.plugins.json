@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "allowJs": true, "checkJs": false, "noImplicitAny": false, "noUnusedLocals": false, "types": [] },
+  "include": ["examples/plugins", "packages/plugin-api/index.d.ts"],
+  "references": []
+}
