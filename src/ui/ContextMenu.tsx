@@ -1,5 +1,6 @@
 import * as Menu from "@radix-ui/react-context-menu";
 import type { ReactNode } from "react";
+import { withMenuTarget } from "../commands/menuTarget";
 import { bindingOf, executeCommand, isEnabled, useCommands } from "../commands/registry";
 import { Kbd } from "./primitives";
 
@@ -36,15 +37,18 @@ export function ContextMenuItem({
   );
 }
 
-/** A menu item bound to a registered command: same title, shortcut and enablement everywhere. */
-export function CommandItem({ id, label }: { id: string; label?: string }) {
+/**
+ * A menu item bound to a registered command: same title, shortcut and
+ * enablement everywhere. `on` is the file the menu is about.
+ */
+export function CommandItem({ id, label, on }: { id: string; label?: string; on?: string }) {
   const command = useCommands((s) => s.commands[id]);
   const binding = useCommands((s) => (command ? bindingOf(command, s.overrides) : undefined));
   if (!command) return null;
   return (
     <Menu.Item
-      disabled={!isEnabled(command)}
-      onSelect={() => executeCommand(id)}
+      disabled={!withMenuTarget(on, () => isEnabled(command))}
+      onSelect={() => withMenuTarget(on, () => executeCommand(id))}
       className={itemClass}
     >
       <span>{label ?? command.title}</span>
