@@ -340,12 +340,17 @@ impl Workspace {
     }
 
     pub fn write(&self, p: &str, text: &str, base: Option<&str>) -> CommandResult<String> {
+        self.write_as(p, text, base, Reason::Edit)
+    }
+
+    /// [`write`](Self::write), saying in the local history who changed it.
+    pub fn write_as(&self, p: &str, text: &str, base: Option<&str>, reason: Reason) -> CommandResult<String> {
         require_visible(p)?;
         let _changing = lock(&self.changing);
         let old = self.vault.read(p).ok();
         let revision = self.vault.write(p, text, base)?;
         if let Some(old) = old {
-            self.remember(p, &old.text, Some(text), Reason::Edit);
+            self.remember(p, &old.text, Some(text), reason);
         }
         self.put_written(p, text)?;
         Ok(revision)
@@ -443,8 +448,18 @@ impl Workspace {
     }
 
     pub fn trash(&self, p: &str) -> CommandResult<()> {
+        self.trash_if(p, None)
+    }
+
+    /// [`trash`](Self::trash), unless the note no longer holds that revision.
+    pub fn trash_if(&self, p: &str, revision: Option<&str>) -> CommandResult<()> {
         require_visible(p)?;
         let _changing = lock(&self.changing);
+        if let Some(revision) = revision
+            && self.vault.read(p)?.revision != revision
+        {
+            return Err(itztli_vault::Error::Conflict(p.to_owned()).into());
+        }
         let notes: Vec<String> = {
             let index = self.index();
             index
@@ -475,10 +490,15 @@ impl Workspace {
     /// Find in Files. A newer search makes this one stop early.
     pub fn search_text(&self, query: &TextQuery) -> CommandResult<TextResults> {
         let mine = self.search.fetch_add(1, Ordering::Relaxed) + 1;
+        self.grep(query, || self.search.load(Ordering::Relaxed) != mine)
+    }
+
+    /// The same search, stopped by its caller alone.
+    pub fn grep(&self, query: &TextQuery, cancelled: impl Fn() -> bool + Sync) -> CommandResult<TextResults> {
         let files: Vec<String> =
             self.index().entries().filter(|e| path::is_note(&e.path) && !e.folder).map(|e| e.path.clone()).collect();
         let read = |p: &str| std::fs::read(self.vault.root().join(p)).ok();
-        Ok(itztli_index::grep(&files, read, query, || self.search.load(Ordering::Relaxed) != mine)?)
+        Ok(itztli_index::grep(&files, read, query, cancelled)?)
     }
 
     /// Where a note, or one not written yet, is linked from.

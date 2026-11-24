@@ -10,6 +10,9 @@ import { CompareDialog } from "./dialogs/CompareDialog";
 import { LocalHistoryDialog } from "./dialogs/LocalHistoryDialog";
 import { Prompts } from "./dialogs/Prompts";
 import { saveAll } from "./editor/documents";
+import { ApprovalDialog } from "./mcp/ApprovalDialog";
+import { McpDialogs } from "./mcp/McpDialogs";
+import { listenToMcp } from "./mcp/store";
 import { useNativeMenu } from "./menu/nativeMenu";
 import { listenToPlugins } from "./plugins/host";
 import { setPreviewDefaults } from "./preview/render";
@@ -72,6 +75,7 @@ export default function App() {
   useEffect(listenToVault, []);
   useEffect(listenToBookmarks, []);
   useEffect(listenToPlugins, []);
+  useEffect(listenToMcp, []);
   useEffect(guardClosing, []);
   useEffect(() => {
     Promise.all([loadAppInfo(), loadSettings()])
@@ -95,7 +99,9 @@ export default function App() {
       <SettingsDialog />
       <LocalHistoryDialog />
       <CompareDialog />
+      <McpDialogs />
       <Prompts />
+      <ApprovalDialog />
       <Notifications />
     </div>
   );

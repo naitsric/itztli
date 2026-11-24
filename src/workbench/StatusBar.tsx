@@ -5,6 +5,7 @@ import { useActiveEditor } from "../editor/active";
 import { problemCount } from "../editor/problems";
 import { onEditorUpdate } from "../editor/updates";
 import { useApp } from "../appInfo";
+import { McpStatusItem } from "../mcp/McpStatusItem";
 import { displayName } from "../vault/paths";
 import { useVault } from "../vault/store";
 import { revealInVault } from "../toolwindows/vaultReveal";
@@ -35,6 +36,7 @@ export function StatusBar() {
         {right.map((i) => (
           <Item key={i.id} item={i} />
         ))}
+        <McpStatusItem />
         <EditorStatus />
         {index?.ready && (
           <span title={`Indexed in ${index.elapsedMs} ms`} className="text-subtle tabular-nums">

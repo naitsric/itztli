@@ -20,6 +20,7 @@ export function showLocalHistory(path: string) {
 const REASON: Record<Revision["reason"], string> = {
   edit: "Edited",
   refactor: "Links updated",
+  mcp: "Changed by an MCP client",
   delete: "Deleted",
 };
 

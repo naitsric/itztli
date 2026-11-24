@@ -27,6 +27,7 @@ import { linkAt, tagAt } from "../editor/links";
 import { openWithReplace } from "../editor/findPanel";
 import { showQuickDoc } from "../editor/quickDoc";
 import { goToProblem } from "../editor/problems";
+import { hasApprovals, openNewClient, showApprovals, showMcp, toggleServer } from "../mcp/store";
 import { refreshPlugins, reloadPlugin, usePlugins } from "../plugins/host";
 import { useFindResults } from "../search/findState";
 import { showPopup } from "../search/popupState";
@@ -240,6 +241,7 @@ export function registerAppCommands(): () => void {
     toolWindow("problems", "Problems", 6),
     toolWindow("structure", "Structure", 7),
     toolWindow("graph", "Graph", 8),
+    toolWindow("mcp", "MCP", 9),
     { id: "view.hideToolWindow", title: "Hide Active Tool Window", category: "Tool Windows", keybinding: "Shift+Escape", enabled: () => focusedToolWindow() !== null, run: () => hideToolWindow(focusedToolWindow()!) },
     { id: "view.hideAllToolWindows", title: "Hide All Tool Windows", category: "Tool Windows", keybinding: "$mod+Shift+F12", enabled: hasVault, run: toggleAllToolWindows },
     { id: "view.resetLayout", title: "Restore Default Layout", category: "Tool Windows", enabled: hasVault, run: resetToolWindows },
@@ -298,6 +300,12 @@ export function registerAppCommands(): () => void {
       },
     },
     { id: "plugins.safeMode", title: "Restart in Safe Mode", category: "Plugins", keywords: ["without plugins"], enabled: () => host.desktop, run: async () => ((await prepareToQuit()) ? api.appRestart(true) : undefined) },
+
+    // ── MCP ──
+    { id: "mcp.newClient", title: "Connect an MCP Client…", category: "MCP", keywords: ["claude", "assistant", "llm", "ai", "agent"], enabled: hasVault, run: openNewClient },
+    { id: "mcp.activity", title: "MCP Activity", category: "MCP", keywords: ["audit", "log"], enabled: hasVault, run: () => showMcp("activity") },
+    { id: "mcp.approvals", title: "Changes Waiting for Approval", category: "MCP", enabled: hasApprovals, run: showApprovals },
+    { id: "mcp.server", title: "Turn MCP Server On or Off", category: "MCP", run: toggleServer },
 
     // ── Application ──
     { id: "app.settings", title: "Settings…", category: "Application", keybinding: "$mod+Comma", keywords: ["preferences"], run: () => showSettings() },

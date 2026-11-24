@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { finish, start } from "./harness.mjs";
+import { finish, freePort, start } from "./harness.mjs";
 
 const tests = [];
 const test = (name, run, options = {}) => tests.push({ name, run, options });
@@ -610,6 +610,176 @@ test("lets keys be changed", async (app, u) => {
   await app.tab.getByRole("dialog", { name: "Recent Files" }).waitFor();
 }, { fill: files({ "a.md": "" }) });
 
+// ── MCP ────────────────────────────────────────────────────────────────────
+
+/** The MCP server listens where nothing else does. */
+async function mcpPort(app) {
+  const port = await freePort();
+  const settings = await app.call("host", "mcp", { command: "settings", args: {} });
+  await app.call("host", "mcp_change", { change: { kind: "settings", settings: { ...settings, port } } });
+  return port;
+}
+
+/** Calls tools as an assistant does: a request on its own, as MCP 2026-07-28 has them. */
+const assistant = (port, token) => async (tool, args) => {
+  const meta = {
+    "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+    "io.modelcontextprotocol/clientInfo": { name: "e2e", version: "1.0" },
+    "io.modelcontextprotocol/clientCapabilities": {},
+  };
+  const params = { name: tool, arguments: { vault: "My Vault", ...args }, _meta: meta };
+  const response = await fetch(`http://127.0.0.1:${port}/mcp`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      accept: "application/json, text/event-stream",
+      "content-type": "application/json",
+      "mcp-protocol-version": "2026-07-28",
+      "mcp-method": "tools/call",
+      "mcp-name": tool,
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params }),
+  });
+  const answer = await response.json();
+  if (!answer.result) throw new Error(JSON.stringify(answer));
+  return answer.result.isError ? { error: answer.result.content[0].text } : answer.result.structuredContent;
+};
+
+/** An assistant with access, already connected. */
+async function connected(app) {
+  const port = await mcpPort(app);
+  const { id } = await app.call("call", "vault_current");
+  const change = { kind: "createClient", name: "claude-code", access: { vaultId: id, access: "write" }, turnOn: true };
+  const { token } = await app.call("host", "mcp_change", { change });
+  return assistant(port, token);
+}
+
+test("connects an MCP client, and shows what it does", async (app, u, port) => {
+  await u.action("Connect an MCP Client");
+  const dialog = app.tab.getByRole("dialog", { name: "Connect an MCP Client" });
+  await dialog.getByLabel("Client name").fill("claude-code");
+  await dialog.getByRole("radio", { name: "Read", exact: true }).click();
+  await app.shot("mcp-new-client");
+  await dialog.getByRole("button", { name: "Create" }).click();
+  const shown = app.tab.getByRole("dialog", { name: "Token for claude-code" });
+  const token = await shown.getByLabel("Token", { exact: true }).innerText();
+  assert.match(token, /^itztli_[\w-]{43}$/);
+  const command = await shown.getByLabel("Claude Code configuration", { exact: true }).innerText();
+  assert.equal(command.trim(), `claude mcp add --scope user --transport http itztli http://127.0.0.1:${port}/mcp --header "Authorization: Bearer ${token}"`);
+  await app.shot("mcp-token");
+  await u.key("Enter");
+  await shown.waitFor({ state: "hidden" });
+  await app.shot("mcp-clients");
+  const access = app.tab.getByRole("table", { name: "Access of claude-code" });
+  assert.equal(await access.getByRole("radio", { name: "Read", exact: true }).getAttribute("aria-checked"), "true");
+
+  const call = assistant(port, token);
+  const found = await call("search_notes", { query: "cancion" });
+  assert.deepEqual(found.notes, [{ path: "Work/Plan.md", lines: [{ line: 3, text: "La canción" }] }]);
+  assert.match((await call("create_note", { path: "x", text: "x" })).error, /may only read/);
+  assert.ok(!u.exists("x.md"));
+
+  const window = app.tab.locator("[data-tool-window=mcp]");
+  await window.getByRole("radio", { name: "Activity" }).click();
+  const log = window.getByRole("listbox", { name: "MCP activity" });
+  await log.getByRole("option", { name: /Denied.*claude-code.*Create x/ }).waitFor();
+  await log.getByRole("option", { name: /Allowed.*claude-code.*1 match.*Searched “cancion”/ }).click();
+  await window.getByRole("region", { name: "Activity details" }).getByText("e2e 1.0").waitFor();
+  // A read of a note opens it.
+  await call("read_note", { path: "Plan" });
+  await log.getByRole("option", { name: /Read Work\/Plan.md/ }).dblclick();
+  await u.editor("Work/Plan.md").waitFor();
+  await app.tab.locator("footer").getByText(`MCP :${port} · 1`).waitFor();
+  await app.shot("mcp-activity");
+}, { fill: files({ "Work/Plan.md": "# Plan\n\nLa canción\n" }), prepare: mcpPort });
+
+test("asks before an MCP client changes a note, and keeps what it said", async (app, u, call) => {
+  await u.open("a", "a.md");
+  await u.caretAfter("a.md", "three");
+  const edit = call("edit_note", { path: "a.md", edits: [{ oldText: "two", newText: "2" }], reason: "You asked" });
+  const dialog = app.tab.getByRole("dialog", { name: "claude-code wants to change a note: a" });
+  await dialog.waitFor();
+  // Someone was typing.
+  await u.type("x y\n");
+  await u.key("Escape");
+  assert.ok(await dialog.isVisible());
+  assert.match(await dialog.innerText(), /My Vault \/\s*a\.md[^]*“You asked”/);
+  const approve = dialog.getByRole("button", { name: "Approve" });
+  assert.ok(await approve.isDisabled());
+  await app.shot("mcp-approval");
+  assert.equal(u.on("a.md"), "one\ntwo\nthree\n");
+  await approve.click();
+  assert.equal((await edit).path, "a.md");
+  assert.equal(u.on("a.md"), "one\n2\nthree\n");
+  await app.until("the editor to show it", async () => (await u.editor("a.md").innerText()).includes("2"));
+  // The keyboard is back in the note.
+  await app.until("the caret", () => u.editor("a.md").evaluate((e) => e === document.activeElement));
+  await u.action("Local History");
+  await app.tab.getByRole("dialog").getByText("Changed by an MCP client").waitFor();
+}, { fill: files({ "a.md": "one\ntwo\nthree\n" }), prepare: connected });
+
+test("rejects, puts off and queues the changes of an MCP client", async (app, u, call) => {
+  const answers = [
+    call("delete_note", { path: "a.md" }),
+    call("create_note", { path: "New/b", text: "# B\n" }),
+    call("move_note", { path: "a.md", to: "c.md" }),
+  ];
+  await app.tab.getByText("1 of 3").waitFor();
+  await app.tab.waitForTimeout(900);
+  await u.key("Escape");
+  await app.tab.getByRole("dialog").waitFor({ state: "hidden" });
+  await app.tab.getByRole("button", { name: "3 approvals" }).click();
+  // Enter, with Reject focused, says no to the first.
+  await app.tab.getByText("1 of 3").waitFor();
+  const title = await app.tab.getByRole("dialog").getByRole("heading").innerText();
+  await app.tab.waitForTimeout(900);
+  await u.key("Enter");
+  await app.tab.getByText("1 of 2").waitFor();
+  for (let left = 2; left > 0; left--) await app.tab.getByRole("dialog").getByRole("button", { name: "Approve" }).click();
+  const results = await Promise.all(answers);
+  const rejected = results.filter((r) => r.error?.startsWith("The user rejected"));
+  assert.equal(rejected.length, 1, title);
+  await app.tab.getByRole("dialog").waitFor({ state: "hidden" });
+}, { fill: files({ "a.md": "a\n", "x.md": "[[a]]\n" }), prepare: connected });
+
+test("makes no change of an MCP client that nobody answers", async (app, u, call) => {
+  await u.open("a", "a.md");
+  const edit = call("edit_note", { path: "a.md", edits: [{ oldText: "one", newText: "two" }] });
+  const dialog = app.tab.getByRole("dialog", { name: "claude-code wants to change a note: a" });
+  await dialog.waitFor();
+  // In front, with Approve ready, until its time is over.
+  await app.until("Approve to be ready", () => dialog.getByRole("button", { name: "Approve" }).isEnabled());
+  assert.match((await edit).error, /^Nobody approved the change in Itztli within 10s/);
+  await dialog.waitFor({ state: "hidden" });
+  assert.equal(u.on("a.md"), "one\n");
+  const [last] = await app.call("host", "mcp", { command: "audit", args: { filter: { limit: 1 } } });
+  assert.deepEqual([last.tool, last.decision], ["edit_note", "timeout"]);
+}, {
+  fill: files({ "a.md": "one\n" }),
+  async prepare(app) {
+    const call = await connected(app);
+    const settings = await app.call("host", "mcp", { command: "settings", args: {} });
+    await app.call("host", "mcp_change", { change: { kind: "settings", settings: { ...settings, approvalTimeoutSecs: 10 } } });
+    return call;
+  },
+});
+
+test("takes an MCP client's access away at once", async (app, u, call) => {
+  await call("read_note", { path: "a.md" });
+  await u.key("Mod+9");
+  const window = app.tab.locator("[data-tool-window=mcp]");
+  await window.getByRole("radio", { name: "Clients" }).click();
+  await window.getByRole("radio", { name: "None", exact: true }).click();
+  await app.until("it to be gone", async () => /No vault/.test((await call("read_note", { path: "a.md" })).error ?? ""));
+  await window.getByRole("button", { name: "Revoke…" }).click();
+  await app.tab.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
+  await app.until("its token to stop", () => call("list_vaults", {}).then(() => false, (e) => /-32001/.test(e.message)));
+  await window.getByRole("radio", { name: "Server" }).click();
+  await app.shot("mcp-server");
+  await window.getByRole("switch", { name: "MCP server" }).click();
+  await app.until("the server to stop", () => call("list_vaults", {}).then(() => false, (e) => !/-32001/.test(e.message)));
+}, { fill: files({ "a.md": "a\n" }), prepare: connected });
+
 // ── Running them ───────────────────────────────────────────────────────────
 
 const wanted = process.argv[2];
@@ -619,8 +789,10 @@ for (const { name, run, options } of tests.filter((t) => !wanted || t.name.inclu
   const started = Date.now();
   try {
     const u = user(app);
+    // What has to be there before the UI is.
+    const prepared = await options.prepare?.(app);
     await u.load();
-    await run(app, u);
+    await run(app, u, prepared);
     if (!options.errors) assert.deepEqual(app.errors, [], "no errors in the console");
     console.log(`✓ ${name} (${((Date.now() - started) / 1000).toFixed(1)}s)`);
   } catch (e) {

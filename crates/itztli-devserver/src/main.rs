@@ -17,7 +17,8 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use futures_util::stream::{self, Stream};
-use itztli_backend::{Backend, CommandError, CommandResult, ErrorCode, Events, net};
+use itztli_backend::{Backend, CommandError, CommandResult, ErrorCode, Events, event, net};
+use itztli_mcp::{Change, Host, McpEvent, McpServer, Store};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::broadcast;
@@ -30,8 +31,25 @@ impl Events for Broadcast {
     }
 }
 
+/// What the MCP server runs on.
+struct McpHost {
+    backend: Arc<Backend>,
+    events: broadcast::Sender<(&'static str, Value)>,
+}
+
+impl Host for McpHost {
+    fn backend(&self) -> &Backend {
+        &self.backend
+    }
+
+    fn notify(&self, event: McpEvent) {
+        let _ = self.events.send((event::MCP, json!(event)));
+    }
+}
+
 struct Server {
     backend: Arc<Backend>,
+    mcp: McpServer,
     events: broadcast::Sender<(&'static str, Value)>,
     vault: PathBuf,
     token: String,
@@ -63,8 +81,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         backend.open_vault(&vault)?;
     }
 
+    let store = Store::open(&data.join("mcp.db"))?;
+    let mcp = McpServer::new(store, Arc::new(McpHost { backend: backend.clone(), events: events.clone() }));
+    mcp.start_if_enabled().await;
+
     let page = HeaderValue::from_str(&var("ITZTLI_DEV_PAGE", "http://localhost:1420"))?;
-    let server = Arc::new(Server { backend, events, vault, token, page });
+    let server = Arc::new(Server { backend, mcp, events, vault, token, page });
     let app = Router::new()
         .route("/{token}/call/{command}", post(call))
         .route("/{token}/host/{command}", post(host))
@@ -119,6 +141,9 @@ struct HostArgs {
     allowed: bool,
     token: String,
     request: Option<net::Request>,
+    command: String,
+    args: Value,
+    change: Option<Change>,
 }
 
 /// What the desktop host asks the user about.
@@ -130,8 +155,14 @@ async fn host(State(server): State<Shared>, Path((_, command)): Path<(String, St
         };
         return answer(net::fetch(request, &origins).await.map(|r| json!(r)));
     }
+    if command == "mcp_change" {
+        let Some(change) = args.change else { return answer(Err(CommandError::invalid("there is no change"))) };
+        return answer(server.mcp.change(change, |_| true).await);
+    }
     let vault = server.vault.clone();
+    let mcp = server.mcp.clone();
     blocking(move || match command.as_str() {
+        "mcp" => mcp.command(&args.command, args.args),
         "vault_pick" => {
             if args.welcome {
                 backend.write_welcome(&vault)?;

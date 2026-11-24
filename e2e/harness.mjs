@@ -11,7 +11,7 @@ import { webkit } from "playwright";
 const root = resolve(import.meta.dirname, "..");
 export const OUTPUT = join(root, "e2e/output");
 
-function freePort() {
+export function freePort() {
   return new Promise((done, fail) => {
     const server = createNetServer();
     server.on("error", fail);

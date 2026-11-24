@@ -1,5 +1,6 @@
 import { lazy } from "react";
 import { registerToolWindow } from "../workbench/toolWindows";
+import { McpWindow } from "../mcp/McpWindow";
 import { BacklinksWindow } from "./BacklinksWindow";
 import { BookmarksWindow } from "./BookmarksWindow";
 import { FindWindow } from "./FindWindow";
@@ -23,6 +24,7 @@ export function registerToolWindows(): () => void {
     define("graph", "Graph", "network", "bottom", 8, GraphWindow),
     define("find", "Find", "search", "bottom", 3, FindWindow),
     define("problems", "Problems", "warning", "bottom", 6, ProblemsWindow),
+    define("mcp", "MCP", "bot", "bottom", 9, McpWindow),
   ];
   return () => undo.forEach((u) => u());
 }

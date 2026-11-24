@@ -68,6 +68,16 @@ export function Kbd({ binding, children }: { binding?: string; children?: ReactN
   );
 }
 
+export function StatusDot({ tone }: { tone: "success" | "warning" | "danger" | "idle" }) {
+  const color = {
+    success: "bg-success",
+    warning: "bg-warning animate-pulse",
+    danger: "bg-danger",
+    idle: "bg-subtle",
+  }[tone];
+  return <span className={cx("inline-block size-2 shrink-0 rounded-full", color)} />;
+}
+
 /** An on/off switch, for settings that apply at once. */
 export function Switch({
   checked,

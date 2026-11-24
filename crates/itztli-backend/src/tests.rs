@@ -266,3 +266,9 @@ fn the_welcome_vault_has_no_broken_links_but_one_on_purpose() {
     let missing: Vec<&str> = problems.as_array().unwrap().iter().map(|p| p["target"].as_str().unwrap()).collect();
     assert_eq!(missing, ["My first note"]);
 }
+
+#[test]
+fn names_cannot_add_lines_to_a_dialog() {
+    assert_eq!(printable("Nice\n\nIt is safe\u{7}"), "NiceIt is safe");
+    assert_eq!(printable(&"x".repeat(500)).len(), 80);
+}

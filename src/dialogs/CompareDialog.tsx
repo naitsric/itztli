@@ -13,6 +13,7 @@ const readOnly = [
   EditorView.theme({
     "&": { fontSize: "12.5px", backgroundColor: "var(--bg-panel)" },
     ".cm-scroller": { fontFamily: "var(--font-code)", lineHeight: "1.6" },
+    ".cm-gutters": { backgroundColor: "transparent", border: "none" },
     ".cm-changedLine": { backgroundColor: "var(--accent-soft)" },
     ".cm-changedText": { background: "var(--editor-match)" },
     ".cm-deletedChunk": { backgroundColor: "transparent" },
@@ -32,6 +33,16 @@ export function Diff({ before, after }: { before: string; after: string }) {
     });
     return () => view.destroy();
   }, [before, after]);
+  return <div ref={host} className="h-full overflow-auto" />;
+}
+
+/** One text, to read. */
+export function NoteText({ text }: { text: string }) {
+  const host = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const view = new EditorView({ parent: host.current!, doc: text, extensions: readOnly });
+    return () => view.destroy();
+  }, [text]);
   return <div ref={host} className="h-full overflow-auto" />;
 }
 
