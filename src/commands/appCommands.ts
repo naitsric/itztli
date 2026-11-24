@@ -56,14 +56,20 @@ import {
   useEditorArea,
 } from "../workbench/editorArea";
 import { focusedToolWindow, hideToolWindow, resetToolWindows, toggleAllToolWindows, toggleToolWindow, showToolWindow } from "../workbench/toolWindows";
+import { menuTarget } from "./menuTarget";
 import { focusContext, registerCommands, type Command } from "./registry";
 
 const hasVault = () => useVault.getState().info !== null;
 const activePath = () => useEditorArea.getState().activePath;
 const hasEditor = () => activeView() !== null;
 
-/** The file an action is about: the one selected in the vault tree, if it has the keyboard; else the one in front. */
+/**
+ * The file an action is about: the one whose menu it was chosen in; the one
+ * selected in the vault tree, if it has the keyboard; else the one in front.
+ */
 function target(): string | null {
+  const inMenu = menuTarget();
+  if (inMenu !== null) return inMenu;
   if (focusContext() === "vault" || focusedToolWindow() === "vault") return useVaultSelection.getState().path;
   return activePath() ?? useVaultSelection.getState().path;
 }

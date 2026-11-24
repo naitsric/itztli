@@ -184,18 +184,18 @@ export function VaultWindow() {
                 <>
                   <ContextMenuItem label="Open" onSelect={() => openPath(menuEntry.path)} />
                   <ContextMenuItem label="Open in a Split" onSelect={() => openPath(menuEntry.path, { split: true })} />
-                  <CommandItem id="navigate.findUsages" />
-                  <CommandItem id="refactor.duplicate" />
-                  <CommandItem id="file.localHistory" />
-                  <CommandItem id="file.copyLink" />
+                  <CommandItem id="navigate.findUsages" on={menuEntry.path} />
+                  <CommandItem id="refactor.duplicate" on={menuEntry.path} />
+                  <CommandItem id="file.localHistory" on={menuEntry.path} />
+                  <CommandItem id="file.copyLink" on={menuEntry.path} />
                 </>
               )}
-              <CommandItem id="file.copyPath" />
-              <CommandItem id="file.reveal" />
+              <CommandItem id="file.copyPath" on={menuEntry.path} />
+              <CommandItem id="file.reveal" on={menuEntry.path} />
               <ContextMenuSeparator />
-              <CommandItem id="refactor.rename" />
-              <CommandItem id="refactor.move" />
-              <CommandItem id="refactor.delete" />
+              <CommandItem id="refactor.rename" on={menuEntry.path} />
+              <CommandItem id="refactor.move" on={menuEntry.path} />
+              <CommandItem id="refactor.delete" on={menuEntry.path} />
               <PluginItems entry={menuEntry} />
             </>
           )}

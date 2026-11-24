@@ -310,6 +310,53 @@ test("moves to the trash after asking", async (app, u) => {
   await app.until("it to be gone", async () => !u.exists("a.md"));
 }, { fill: files({ "a.md": "x", "b.md": "[[a]]" }) });
 
+test("acts on the file right-clicked, whatever note is open", async (app, u) => {
+  const row = (name) => app.tab.getByRole("treeitem", { name, exact: true });
+  const choose = async (name, item) => {
+    await row(name).click({ button: "right" });
+    await app.tab.getByRole("menuitem", { name: item }).click();
+  };
+  await u.open("a", "a.md");
+
+  await choose("c", /^Rename/);
+  const rename = app.tab.getByRole("dialog", { name: "Rename Note" });
+  await rename.waitFor();
+  assert.equal(await rename.getByRole("textbox").inputValue(), "c");
+  await app.until("the name to be selected", () => rename.getByRole("textbox").evaluate((e) => e === document.activeElement && e.selectionEnd === 1));
+  await u.type("renamed");
+  await u.key("Enter");
+  await app.until("c to be renamed", async () => u.exists("renamed.md") && !u.exists("c.md"));
+
+  await choose("b", /^Move to Trash/);
+  const trash = app.tab.getByRole("dialog", { name: "Move “b” to the Trash?" });
+  await trash.getByRole("button", { name: "Move to Trash" }).click();
+  await app.until("b to be gone", async () => !u.exists("b.md"));
+
+  // From one row's menu to another's.
+  const dir = await row("dir").boundingBox();
+  await row("a").click({ button: "right" });
+  await app.tab.getByRole("menuitem", { name: /^Rename/ }).waitFor();
+  await app.tab.mouse.click(dir.x + 40, dir.y + 8, { button: "right" });
+  await u.key("Escape");
+  await app.tab.getByRole("menu").waitFor({ state: "hidden" });
+  await choose("dir", /^Rename/);
+  await app.tab.getByRole("dialog", { name: "Rename Folder" }).waitFor();
+  await u.key("Escape");
+
+  await choose("pic.png", /^Rename/);
+  await app.tab.getByRole("dialog", { name: "Rename File" }).waitFor();
+  await u.key("Escape");
+  // Nobody touched the note in front.
+  assert.equal(u.on("a.md"), "a [[b]]\n");
+  await u.editor("a.md").waitFor();
+
+  // The empty space is about no file.
+  const tree = await app.tab.getByRole("tree", { name: "Vault" }).boundingBox();
+  await app.tab.mouse.click(tree.x + 60, tree.y + tree.height - 20, { button: "right" });
+  await app.tab.getByRole("menuitem", { name: "New Note…" }).waitFor();
+  assert.equal(await app.tab.getByRole("menuitem", { name: /^Rename/ }).count(), 0);
+}, { fill: files({ "a.md": "a [[b]]\n", "b.md": "b\n", "c.md": "c\n", "dir/d.md": "d\n", "pic.png": "x" }) });
+
 test("comes back as it was left", async (app, u) => {
   await u.open("a", "a.md");
   await u.key("Mod+4");

@@ -165,7 +165,10 @@ export function TreeView<T>({
       className="relative min-h-0 flex-1"
       data-focus-context={focusContext}
       data-speed-search={query ? "" : undefined}
-      onContextMenu={() => onContextMenu?.(null)}
+      // A row says so itself, and lets the event on: the menu opens further up.
+      onContextMenu={(e) => {
+        if (!(e.target as Element).closest("[role=treeitem]")) onContextMenu?.(null);
+      }}
     >
       {query && (
         <div className="absolute top-1.5 right-2 z-10 flex items-center gap-1.5 rounded-md border border-accent bg-elevated px-2 py-0.5 text-[12px] text-fg shadow-popover">
@@ -210,9 +213,7 @@ export function TreeView<T>({
                   if (activateOnClick && e.detail === 1) onActivate(row, "click");
                 }}
                 onDoubleClick={() => onActivate(row, "double")}
-                onContextMenu={(e) => {
-                  // The container's handler is for the empty space.
-                  e.stopPropagation();
+                onContextMenu={() => {
                   onSelect(row);
                   onContextMenu?.(row);
                 }}
