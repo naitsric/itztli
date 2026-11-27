@@ -54,7 +54,8 @@ impl Index {
         for (source, meta) in self.notes() {
             for link in &meta.links {
                 let to = match self.resolve_link(source, link) {
-                    Some(to) if to != source && path::is_note(to) => To::Note(to),
+                    // A note that could not be read is in nobody's graph.
+                    Some(to) if to != source && self.note(to).is_some() => To::Note(to),
                     Some(_) => continue,
                     None if missing => {
                         let name = path::link_name(&link.target);
@@ -146,7 +147,7 @@ impl Index {
 #[cfg(test)]
 mod tests {
     use super::Relation;
-    use crate::testing::index;
+    use crate::testing::{entry, index};
 
     #[test]
     fn links_count_once_per_way() {
@@ -185,6 +186,16 @@ mod tests {
         assert_eq!(g.edges, [[2, 0], [2, 1], [3, 0]]);
         let relation = |name: &str, edges: &[u32]| Relation { name: name.into(), edges: edges.to_vec() };
         assert_eq!(g.relations, [relation("attendees", &[0, 1]), relation("author", &[0]), relation("reports", &[2])]);
+    }
+
+    #[test]
+    fn links_to_notes_that_could_not_be_read_are_left_out() {
+        let mut i = index(&[("a.md", "[[big]] [[b]]"), ("b.md", "")]);
+        i.put(entry("big.md"), None);
+        let all = i.graph(None, true);
+        assert_eq!(all.nodes.iter().map(|n| n.id.as_str()).collect::<Vec<_>>(), ["a.md", "b.md"]);
+        assert_eq!(all.edges, [[0, 1]]);
+        assert!(i.graph(Some(("big.md", 1)), true).nodes.is_empty());
     }
 
     #[test]
