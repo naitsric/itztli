@@ -121,9 +121,10 @@ it a `Host` and two commands: `mcp`, which looks and answers approvals, and
 gives a program more than it had comes with a `Question`, and the host asks it
 in a native dialog; `McpServer::change` is the only way to make one. A tool
 that reads implements `ReadTool`; one that writes implements `WriteTool`, whose
-`plan` works out the change the user sees, made later on exactly that. Every
-call leaves one row in the audit log, whatever happens to it. Its settings,
-clients and log are in `mcp.db`, in the app's data folder.
+`plan` works out the change the user sees, made later on exactly that (or at
+once, for a client the user lets change notes without asking). Every call
+leaves one row in the audit log, whatever happens to it. Its settings, clients
+and log are in `mcp.db`, in the app's data folder.
 
 Clients that only launch stdio servers run the app's own executable as
 `itztli mcp-bridge --port <port>`, with the token in `ITZTLI_MCP_TOKEN`.

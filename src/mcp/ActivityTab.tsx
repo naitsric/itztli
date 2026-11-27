@@ -596,7 +596,7 @@ function ActivityRow({
             selected ? "bg-accent-soft" : "hover:bg-hover",
           )}
         >
-          <DecisionBadge decision={entry.decision} className="w-[68px] justify-center" />
+          <DecisionBadge entry={entry} className="w-[68px] justify-center" />
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-1.5 text-[11.5px] leading-4">
               <time dateTime={entry.at} title={formatFullTime(entry.at)} className="shrink-0 text-subtle tabular-nums">

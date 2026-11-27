@@ -27,7 +27,7 @@ export interface ServerStatus {
   error: string | null;
 }
 
-/** What a client may do in a vault. Changes also need the user's approval each time. */
+/** What a client may do in a vault. Changes also need the user's approval each time, unless they let the client go without. */
 export type Access = "read" | "write";
 
 export interface Grant {
@@ -52,6 +52,8 @@ export interface McpClient {
   lastClientVersion: string | null;
   /** Set once revoked: its token no longer works. */
   revokedAt: string | null;
+  /** Whether each change it makes waits for the user's approval. True unless they turned it off for this client. */
+  changesNeedApproval: boolean;
   grants: Grant[];
 }
 
@@ -202,4 +204,6 @@ export const mcpApi = {
   deleteClient: (id: string) => change<null>("deleteClient", { id }),
   setAccess: (id: string, vaultId: string, access: Access | null) =>
     change<McpClient | null>("setAccess", { id, vaultId, access }),
+  /** Whether each change of the client waits for approval. Never lets it change a vault it may only read. */
+  setApproval: (id: string, required: boolean) => change<McpClient | null>("setApproval", { id, required }),
 };

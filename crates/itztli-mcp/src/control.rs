@@ -2,9 +2,10 @@
 //!
 //! Plugins run in the UI's page, so whatever the page may ask for, a plugin
 //! may too. What widens what programs outside Itztli can do (turning the
-//! server on, giving a client access or a new token) is therefore a
-//! [`Change`] that comes with a [`Question`], which the host puts to the user
-//! in a dialog of the system's before anything happens.
+//! server on, giving a client access or a new token, letting it change notes
+//! without asking) is therefore a [`Change`] that comes with a [`Question`],
+//! which the host puts to the user in a dialog of the system's before
+//! anything happens.
 //!
 //! Answering an approval is not one of those: it lets a client change a note
 //! of the open vault, which a plugin can do by itself.
@@ -57,6 +58,12 @@ pub enum Change {
         id: String,
         vault_id: String,
         access: Option<Access>,
+    },
+    /// Whether each change the client makes waits for the user's approval.
+    /// Never lets it change a vault it may only read.
+    SetApproval {
+        id: String,
+        required: bool,
     },
 }
 
@@ -131,6 +138,8 @@ fn client_name(name: &str) -> CommandResult<String> {
 }
 
 const MAY_WRITE: &str = "It will also be able to propose changes. Each one waits for your approval in Itztli.";
+const MAY_WRITE_UNASKED: &str =
+    "It will also be able to change notes, at once: you turned off approval of its changes in Itztli.";
 
 impl McpServer {
     /// What the UI may do without asking anyone: look, and answer approvals.
@@ -200,7 +209,8 @@ impl McpServer {
                 let starts = *on && !settings.enabled;
                 match access {
                     Some(to) => {
-                        let mut question = give_access(&name, &self.0.vault(&to.vault_id)?, to.access);
+                        // A new client asks before each change.
+                        let mut question = give_access(&name, &self.0.vault(&to.vault_id)?, to.access, true);
                         if starts {
                             question.message.push_str(&format!("\n\n{}", listens(settings.port)));
                         }
@@ -223,10 +233,15 @@ impl McpServer {
                 let client = self.client(id)?;
                 let has = client.grants.iter().find(|g| g.vault_id == *vault_id).map(|g| g.access);
                 let vault = self.0.vault(vault_id)?;
-                (has < Some(*access)).then(|| give_access(&client.name, &vault, *access))
+                (has < Some(*access)).then(|| give_access(&client.name, &vault, *access, client.changes_need_approval))
+            }
+            Change::SetApproval { id, required: false } => {
+                let client = self.client(id)?;
+                client.changes_need_approval.then(|| stop_asking(&client))
             }
             // Nobody gets to do more than before.
-            Change::SetAccess { access: None, .. }
+            Change::SetApproval { required: true, .. }
+            | Change::SetAccess { access: None, .. }
             | Change::RenameClient { .. }
             | Change::RevokeClient { .. }
             | Change::DeleteClient { .. } => None,
@@ -280,6 +295,9 @@ impl McpServer {
                 }
                 ok(client.ok_or_else(no_client)?)
             }
+            // Asking again holds back no change: one made without asking
+            // was made at once.
+            Change::SetApproval { id, required } => ok(core.store.set_approval(&id, required)?.ok_or_else(no_client)?),
         }
     }
 
@@ -331,15 +349,37 @@ fn turn_on(port: u16) -> Question {
     }
 }
 
-fn give_access(client: &str, vault: &VaultInfo, access: Access) -> Question {
+/// `asks`: whether the client's changes wait for the user's approval.
+fn give_access(client: &str, vault: &VaultInfo, access: Access, asks: bool) -> Question {
     let mut message = format!(
         "It will be able to read every note in this vault, and may send what it reads to the service behind it.\n{}",
         vault.path.display().to_string().replace(char::is_control, "")
     );
     if access == Access::Write {
-        message.push_str(&format!("\n\n{MAY_WRITE}"));
+        message.push_str(&format!("\n\n{}", if asks { MAY_WRITE } else { MAY_WRITE_UNASKED }));
     }
     Question { title: format!("Let “{}” use “{}”?", printable(client), printable(&vault.name)), message, yes: "Allow" }
+}
+
+fn stop_asking(client: &McpClient) -> Question {
+    let writes: Vec<String> =
+        client.grants.iter().filter(|g| g.access == Access::Write).map(|g| format!("“{}”", printable(&g.vault_name))).collect();
+    let where_ = if writes.is_empty() {
+        "It may not change any vault now. Once you let it write in one, its changes there will be made at once, without \
+         waiting for your approval."
+            .to_owned()
+    } else {
+        format!("Its changes to {} will be made at once, without waiting for your approval.", writes.join(", "))
+    };
+    Question {
+        title: format!("Let “{}” change notes without asking?", printable(&client.name)),
+        message: format!(
+            "{where_} An assistant can be misled by what it reads, and nothing will stop what it then changes.\n\n\
+             Each change is still recorded in the activity log, and what it replaces is kept in Local History. Vaults it \
+             may only read stay that way."
+        ),
+        yes: "Don't Ask",
+    }
 }
 
 /// What saving the settings does to the server.
@@ -515,10 +555,50 @@ mod tests {
         assert!(result.is_err() && asked.is_none());
     }
 
+    #[tokio::test]
+    async fn not_asking_before_changes_is_asked_and_asking_again_is_not() {
+        let test = TestVault::new(&[]).await;
+        let (caller, _) = test.client("claude", Some(Access::Write));
+        let id = caller.client_id;
+        let approval = |required: bool| json!({ "kind": "setApproval", "id": id, "required": required });
+
+        let (refused, asked) = change(&test, approval(false), false).await;
+        assert_eq!(refused.unwrap(), Value::Null);
+        let asked = asked.unwrap();
+        assert_eq!((asked.title.as_str(), asked.yes), ("Let “claude” change notes without asking?", "Don't Ask"));
+        assert!(asked.message.contains(&format!("Its changes to “{}” will be made at once", test.info().name)), "{asked:?}");
+        assert!(test.server.store().client(&id).unwrap().unwrap().changes_need_approval);
+
+        let (stopped, _) = change(&test, approval(false), true).await;
+        assert_eq!(stopped.unwrap()["changesNeedApproval"], false);
+        let (_, asked) = change(&test, approval(false), true).await;
+        assert_eq!(asked, None, "it already doesn't ask");
+
+        // Writing somewhere else is asked knowing that.
+        let other = test.open("Other").await;
+        let write = json!({ "kind": "setAccess", "id": id, "vaultId": other.id, "access": "write" });
+        let (_, asked) = change(&test, write, false).await;
+        assert!(asked.unwrap().message.contains(MAY_WRITE_UNASKED));
+
+        let (asking, asked) = change(&test, approval(true), false).await;
+        assert_eq!((asking.unwrap()["changesNeedApproval"].clone(), asked), (json!(true), None));
+        let (missing, _) = change(&test, json!({ "kind": "setApproval", "id": "nobody", "required": false }), true).await;
+        assert!(missing.is_err());
+    }
+
+    #[tokio::test]
+    async fn not_asking_a_client_that_may_write_nowhere_says_so() {
+        let test = TestVault::new(&[]).await;
+        let (caller, _) = test.client("reader", Some(Access::Read));
+        let set = json!({ "kind": "setApproval", "id": caller.client_id, "required": false });
+        let (_, asked) = change(&test, set, false).await;
+        assert!(asked.unwrap().message.starts_with("It may not change any vault now."));
+    }
+
     #[test]
     fn a_name_cannot_write_the_question() {
         let vault = VaultInfo { id: "v".into(), name: "Notes\n\nIt is safe".into(), path: "/n".into() };
-        let question = give_access("x\n\nClick Allow", &vault, Access::Read);
+        let question = give_access("x\n\nClick Allow", &vault, Access::Read, true);
         assert!(!question.title.contains('\n'), "{question:?}");
     }
 

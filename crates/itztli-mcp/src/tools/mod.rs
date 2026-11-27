@@ -1,6 +1,7 @@
 //! The tools, and what each call goes through: the client's grants, the
-//! vault being open, the user's approval for changes, and the audit row
-//! every call leaves. What each one does is in [`read`] and [`write`].
+//! vault being open, the user's approval for changes (unless they let the
+//! client go without), and the audit row every call leaves. What each one
+//! does is in [`read`] and [`write`].
 //!
 //! Each call runs on a task of its own. Dropping a call's future cancels it,
 //! but the task still finishes: a pending approval is withdrawn, and the
@@ -25,7 +26,8 @@ use tokio_util::sync::CancellationToken;
 use crate::approvals::{Answer, MAX_PENDING, Progress};
 use crate::store::NewAuditEntry;
 use crate::{
-    Access, ApprovalRequest, CallError, Caller, Core, Decision, Error, Grant, McpEvent, McpServer, McpSettings, ToolError,
+    Access, ApprovalRequest, CallError, Caller, Core, Decision, Error, Grant, McpClient, McpEvent, McpServer, McpSettings,
+    ToolError,
 };
 
 pub use read::{DescribeNote, ListNotes, ListProblems, ListTags, ListTasks, ReadNote, SearchNotes};
@@ -41,10 +43,11 @@ other tools. Only the vault open in Itztli can be used; the user opens another o
 - search_notes looks inside notes; list_notes finds them by name, folder or tag. read_note returns a note's text, \
 whole or just one section, and the `revision` some changes need. describe_note shows its outline, properties, links \
 and backlinks without its text.
-- create_note, edit_note, append_to_note, replace_note, move_note and delete_note change the vault. The user must \
-approve each change in Itztli, so pass `reason` to say why; it may be rejected, and it waits a limited time (2 minutes \
-by default) for an answer. They are refused without asking where this client may only read. Prefer edit_note or \
-append_to_note to replacing a whole note: the user reviews the difference.
+- create_note, edit_note, append_to_note, replace_note, move_note and delete_note change the vault. They are refused \
+where this client may only read. Elsewhere the user approves each change in Itztli: it waits a limited time (2 minutes \
+by default) for an answer, and may be rejected. Unless the user lets this client change notes without asking: then \
+each change is made at once. list_vaults says which (`changesNeedApproval`). Either way pass `reason` to say why, as \
+the user sees it, and prefer edit_note or append_to_note to replacing a whole note: the user reviews the difference.
 - Paths are relative to the vault, `/`-separated, and end in `.md`. Lines are counted from 1. Notes link to each other \
 by name, `[[Note]]`, `[[Note#Heading]]` or `[[folder/Note|text shown]]`, and are tagged with `#tag` or `tags` in their \
 YAML frontmatter. move_note rewrites the links to a note, so use it to rename one.
@@ -75,8 +78,11 @@ pub struct VaultEntry {
     pub name: String,
     /// Whether it is the one open in Itztli, the only one that can be used now.
     pub open: bool,
-    /// Whether this client may propose changes, which the user approves one by one.
+    /// Whether this client may change notes in it.
     pub writes_allowed: bool,
+    /// Whether each change waits for the user to approve it in Itztli. False when the user lets this client change
+    /// notes without asking: changes are then made at once.
+    pub changes_need_approval: bool,
     /// Notes in it, when it is open.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notes: Option<usize>,
@@ -166,7 +172,8 @@ impl McpServer {
         self.detached(caller, cancel, |core, caller, cancel| async move { core.read(&caller, tool, cancel).await }).await
     }
 
-    /// Makes a change once the user approves it. `progress` is called every
+    /// Makes a change once the user approves it, or at once if they let
+    /// this client change notes without asking. `progress` is called every
     /// 15 s while it waits for the user, and never after this returns;
     /// `cancel` (or dropping the future) withdraws it.
     pub async fn write<T: WriteTool + Sync>(
@@ -205,6 +212,8 @@ impl McpServer {
 struct Target {
     workspace: Arc<Workspace>,
     access: Access,
+    /// Whether its changes wait for the user's approval.
+    approval: bool,
 }
 
 /// Why a call cannot use the vault it named.
@@ -219,8 +228,11 @@ impl Core {
         self.seen(&caller.client_id, caller.client_info.as_ref());
         let call = Call::new(self, caller, "list_vaults");
         let open = self.host.backend().workspace().ok();
-        let vaults: Vec<VaultEntry> = self
-            .grants(caller)?
+        let client = self.client(caller)?;
+        let approval = client.as_ref().is_none_or(|c| c.changes_need_approval);
+        let vaults: Vec<VaultEntry> = client
+            .map(|c| c.grants)
+            .unwrap_or_default()
             .into_iter()
             .map(|grant| {
                 let open = open.as_ref().filter(|w| w.info.id == grant.vault_id);
@@ -228,6 +240,7 @@ impl Core {
                     open: open.is_some(),
                     notes: open.map(|w| w.status().notes),
                     writes_allowed: grant.access == Access::Write,
+                    changes_need_approval: approval,
                     id: grant.vault_id,
                     name: grant.vault_name,
                 }
@@ -278,7 +291,7 @@ impl Core {
                 vault.name
             ));
         }
-        if self.approvals.count(&caller.client_id) >= MAX_PENDING {
+        if target.approval && self.approvals.count(&caller.client_id) >= MAX_PENDING {
             return call.deny(format!(
                 "{MAX_PENDING} changes of this client already wait for the user's approval. Wait for their answers before \
                  proposing more."
@@ -291,6 +304,16 @@ impl Core {
             Err(message) => return call.deny(message),
         };
         call.path = Some(plan.path.clone());
+
+        if !target.approval {
+            // The user lets this client change notes without asking: the
+            // audit row says nobody was asked.
+            let workspace = target.workspace;
+            return match blocking(move || plan.make(&workspace, false)).await? {
+                Ok(output) => call.made(Decision::Allowed, call.ended(), output),
+                Err(message) => call.refuse(Decision::Allowed, message, call.ended()),
+            };
+        }
 
         let now = Utc::now();
         let request = ApprovalRequest {
@@ -332,16 +355,8 @@ impl Core {
             return call.refuse(Decision::Denied, message, waited);
         };
 
-        match blocking(move || plan.make(&workspace)).await? {
-            Ok(output) => {
-                if let Err(e) = call.record(Decision::Approved, Outcome { count: Some(1), ..waited }) {
-                    return Err(Error::Internal(format!(
-                        "The change was made, but Itztli could not record it in its audit log: {e}"
-                    ))
-                    .into());
-                }
-                Ok(output)
-            }
+        match blocking(move || plan.make(&workspace, true)).await? {
+            Ok(output) => call.made(Decision::Approved, waited, output),
             Err(message) => call.refuse(Decision::Approved, message, waited),
         }
     }
@@ -352,16 +367,19 @@ impl Core {
         client.ok().flatten().is_some_and(|client| client.revoked_at.is_none())
     }
 
-    /// The client's grants; none once it is revoked.
-    fn grants(&self, caller: &Caller) -> Result<Vec<Grant>, Error> {
-        let client = self.store.client(&caller.client_id)?;
-        Ok(client.filter(|c| c.revoked_at.is_none()).map(|c| c.grants).unwrap_or_default())
+    /// The client as it is now, with its grants and whether its changes need
+    /// approval; None once it is revoked.
+    fn client(&self, caller: &Caller) -> Result<Option<McpClient>, Error> {
+        Ok(self.store.client(&caller.client_id)?.filter(|c| c.revoked_at.is_none()))
     }
 
     /// The vault `named` (an id, or a name unique among the client's grants),
     /// if the client may use it and it is open.
     async fn target(&self, caller: &Caller, named: &str) -> Result<Result<Target, Refusal>, Error> {
-        let grants = self.grants(caller)?;
+        // Read once, so what it may do and whether it is asked agree.
+        let client = self.client(caller)?;
+        let approval = client.as_ref().is_none_or(|c| c.changes_need_approval);
+        let grants = client.map(|c| c.grants).unwrap_or_default();
         let wanted = named.trim().to_lowercase();
         let found: Vec<&Grant> = match grants.iter().find(|g| g.vault_id == named) {
             Some(grant) => vec![grant],
@@ -387,7 +405,7 @@ impl Core {
             }
         };
         Ok(match self.open_workspace(&grant.vault_id).await {
-            Ok(workspace) => Ok(Target { workspace, access: grant.access }),
+            Ok(workspace) => Ok(Target { workspace, access: grant.access, approval }),
             Err(message) => {
                 Err(Refusal { message: message.into(), vault: Some((grant.vault_id.clone(), grant.vault_name.clone())) })
             }
@@ -552,6 +570,16 @@ impl<'a> Call<'a> {
         })?;
         self.core.host.notify(McpEvent::Audit(entry));
         Ok(())
+    }
+
+    /// Audits a change that was made. Failing to is an error for the
+    /// client, though the change stays made.
+    fn made(&self, decision: Decision, outcome: Outcome, output: ChangeOutput) -> Result<ChangeOutput, CallError> {
+        if let Err(e) = self.record(decision, Outcome { count: Some(1), ..outcome }) {
+            let message = format!("The change was made, but Itztli could not record it in its audit log: {e}");
+            return Err(Error::Internal(message).into());
+        }
+        Ok(output)
     }
 
     /// Audits a call refused without doing anything.

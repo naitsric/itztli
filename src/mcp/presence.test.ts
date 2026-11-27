@@ -25,6 +25,7 @@ const client = (id: string, lastSeenAt: string | null, revokedAt: string | null 
   lastClientName: null,
   lastClientVersion: null,
   revokedAt,
+  changesNeedApproval: true,
   grants: [],
 });
 

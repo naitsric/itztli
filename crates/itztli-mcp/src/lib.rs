@@ -15,7 +15,9 @@
 //!   and nothing outside the vault.
 //! - **Approval.** A change is worked out, shown to the user in full, and
 //!   made only if they approve it; never with a `read` grant. It is then made
-//!   on the very revision they saw, or not at all.
+//!   on the very revision they saw, or not at all. The user may let a client
+//!   they trust go without, and only they can: its changes are then made at
+//!   once, and audited as made without asking.
 //! - **Local history.** What a change replaces can always be brought back.
 //! - **Audit.** Every call leaves one row in the audit log, and its result
 //!   never leaves Itztli without it.

@@ -531,3 +531,100 @@ async fn nobody_answering_is_a_no() {
     assert_eq!(test.events.last_audit().decision, Decision::Timeout);
     assert_eq!(test.on_disk("Home.md").as_deref(), Some(FILES[0].1));
 }
+
+/// What the user decides in Itztli about asking before each change of a client.
+async fn set_approval(test: &TestVault, caller: &Caller, required: bool) {
+    let change = json!({ "kind": "setApproval", "id": caller.client_id, "required": required });
+    let client = test.server.change(serde_json::from_value(change).unwrap(), |_| true).await.unwrap();
+    assert_eq!(client["changesNeedApproval"], required);
+}
+
+fn approvals_asked(test: &TestVault) -> usize {
+    test.events.all().iter().filter(|e| matches!(e, McpEvent::ApprovalRequested(_))).count()
+}
+
+#[tokio::test]
+async fn a_client_the_user_lets_go_without_asking_changes_notes_at_once() {
+    let (test, caller) = setup(Access::Write).await;
+    let (other, _) = test.client("other", Some(Access::Write));
+    set_approval(&test, &caller, false).await;
+    let vaults = test.server.list_vaults(&caller).await.unwrap().vaults;
+    assert_eq!((vaults[0].writes_allowed, vaults[0].changes_need_approval), (true, false));
+    assert!(test.server.list_vaults(&other).await.unwrap().vaults[0].changes_need_approval, "only that client");
+
+    // Nobody answers anything: each call returns with its change made.
+    macro_rules! at_once {
+        ($tool:ty, $args:expr) => {{
+            let cancel = CancellationToken::new();
+            let call = test.server.write(&caller, args::<$tool>($args), |_| {}, &cancel);
+            tokio::time::timeout(Duration::from_secs(10), call).await.expect("made without waiting for anyone")
+        }};
+    }
+    let created = at_once!(CreateNote, json!({ "path": "Ideas/New", "text": "# New\n", "reason": "you asked" })).unwrap();
+    assert_eq!((created.path.as_str(), test.on_disk("Ideas/New.md").as_deref()), ("Ideas/New.md", Some("# New\n")));
+    let audit = test.events.last_audit();
+    assert_eq!((audit.tool.as_str(), audit.decision, audit.approval_wait_ms), ("create_note", Decision::Allowed, None));
+    assert_eq!((audit.detail.as_deref(), audit.reason.as_deref(), audit.count), (Some("# New\n"), Some("you asked"), Some(1)));
+
+    at_once!(EditNote, json!({ "path": "Home.md", "edits": [{ "oldText": "See", "newText": "Saw" }] })).unwrap();
+    assert!(test.on_disk("Home.md").unwrap().contains("Saw [[Plan]]"));
+    let history = test.backend().call("history_list", json!({ "path": "Home.md" })).unwrap();
+    assert_eq!(history[0]["reason"], "mcp", "what it replaced is in the local history");
+    let moved = at_once!(MoveNote, json!({ "path": "Work/Plan.md", "to": "Archive/Big plan" })).unwrap();
+    assert_eq!(moved.relinked, ["Home.md"]);
+    at_once!(DeleteNote, json!({ "path": "Work/Old plan.md" })).unwrap();
+    assert!(test.on_disk("Work/Old plan.md").is_none());
+
+    // What can't be done is refused as before.
+    let refused = message(at_once!(CreateNote, json!({ "path": "Home", "text": "x" })));
+    assert!(refused.contains("already exists"), "{refused}");
+    assert_eq!(test.events.last_audit().decision, Decision::Denied);
+
+    assert_eq!(approvals_asked(&test), 0);
+    assert!(test.server.pending_approvals().is_empty());
+    let decisions: Vec<Decision> = test.events.audit().iter().filter(|e| e.tool != "list_vaults").map(|e| e.decision).collect();
+    assert_eq!(decisions, [Decision::Allowed, Decision::Allowed, Decision::Allowed, Decision::Allowed, Decision::Denied]);
+}
+
+#[tokio::test]
+async fn asking_again_counts_from_the_next_call() {
+    let (test, caller) = setup(Access::Write).await;
+    set_approval(&test, &caller, false).await;
+    let (outcome, user) = change!(test, &caller, true, AppendToNote, json!({ "path": "Home.md", "text": "One." }));
+    user.abort();
+    outcome.unwrap();
+    assert_eq!((test.events.last_audit().decision, approvals_asked(&test)), (Decision::Allowed, 0));
+
+    set_approval(&test, &caller, true).await;
+    assert!(test.server.list_vaults(&caller).await.unwrap().vaults[0].changes_need_approval);
+    let (outcome, user) = change!(test, &caller, false, AppendToNote, json!({ "path": "Home.md", "text": "Two." }));
+    assert!(message(outcome).starts_with("The user rejected this change"));
+    assert_eq!(seen(user).await.after.unwrap(), format!("{}One.\nTwo.\n", FILES[0].1));
+    let audit = test.events.last_audit();
+    assert_eq!((audit.decision, audit.approval_wait_ms.is_some()), (Decision::Rejected, true));
+    assert_eq!(test.on_disk("Home.md").unwrap(), format!("{}One.\n", FILES[0].1));
+
+    let (outcome, _) = change!(test, &caller, true, AppendToNote, json!({ "path": "Home.md", "text": "Three." }));
+    outcome.unwrap();
+    let audit = test.events.last_audit();
+    assert_eq!((audit.decision, audit.approval_wait_ms.is_some()), (Decision::Approved, true));
+
+    tokio::time::pause();
+    let (_, call) = waiting(&test, &caller).await;
+    tokio::time::advance(Duration::from_secs(121)).await;
+    assert!(message(call.await.unwrap()).starts_with("Nobody approved the change"));
+    assert_eq!(test.events.last_audit().decision, Decision::Timeout);
+}
+
+#[tokio::test]
+async fn not_asking_never_lets_a_client_change_what_it_may_only_read() {
+    let (test, caller) = setup(Access::Read).await;
+    set_approval(&test, &caller, false).await;
+    let vaults = test.server.list_vaults(&caller).await.unwrap().vaults;
+    assert_eq!((vaults[0].writes_allowed, vaults[0].changes_need_approval), (false, false));
+    let create = CreateNote { vault: vault(), path: "New.md".into(), text: "x".into(), reason: None };
+    let refused = message(test.server.write(&caller, create, |_| {}, &CancellationToken::new()).await);
+    assert!(refused.contains("may only read 'Notes'"), "{refused}");
+    assert_eq!(test.events.last_audit().decision, Decision::Denied);
+    assert!(test.on_disk("New.md").is_none() && approvals_asked(&test) == 0);
+}

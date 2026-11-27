@@ -11,6 +11,7 @@ import {
   formatLogTime,
   isChange,
   isFiltered,
+  isUnasked,
   matches,
   MAX_ENTRIES,
   mergeEntries,
@@ -284,5 +285,13 @@ describe("what a row says", () => {
 
   it("tells changes from reads", () => {
     expect([isChange({ tool: "edit_note" }), isChange({ tool: "read_note" }), isChange({ tool: "list_vaults" })]).toEqual([true, false, false]);
+  });
+
+  it("tells changes nobody was asked about from approved ones", () => {
+    expect(isUnasked({ tool: "create_note", decision: "allowed" })).toBe(true);
+    expect(isUnasked({ tool: "create_note", decision: "approved" })).toBe(false);
+    expect(isUnasked({ tool: "create_note", decision: "denied" })).toBe(false);
+    // Reading never asks.
+    expect(isUnasked({ tool: "read_note", decision: "allowed" })).toBe(false);
   });
 });

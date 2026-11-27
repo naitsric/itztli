@@ -8,9 +8,9 @@ import { Button, cx } from "../ui/primitives";
 import { useNow } from "../ui/useNow";
 import { useVault } from "../vault/store";
 import { openPath } from "../workbench/editorArea";
-import { callSummary, countLabel, formatFullTime, formatLogTime, isChange } from "./activity";
+import { callSummary, countLabel, formatFullTime, formatLogTime, isChange, isUnasked } from "./activity";
 import type { AuditEntry, Decision } from "./api";
-import { DECISION_HINT, DECISION_LABEL, DECISION_TONE, TRANSPORT_LABEL } from "./labels";
+import { DECISION_LABEL, DECISION_TONE, decisionHint, TRANSPORT_LABEL } from "./labels";
 import { clientInfoLabel } from "./presence";
 import { CopyButton } from "./SnippetPicker";
 
@@ -21,17 +21,18 @@ const TONE_CLASS: Record<(typeof DECISION_TONE)[Decision], string> = {
   warning: "bg-warning/15 text-warning",
 };
 
-/** A decision as a small pill: quiet for what just ran, colored for everything else. */
-export function DecisionBadge({ decision, className }: { decision: Decision; className?: string }) {
+/** A call's decision as a small pill: quiet for what just ran, colored for everything else. */
+export function DecisionBadge({ entry, className }: { entry: Pick<AuditEntry, "tool" | "decision">; className?: string }) {
   return (
     <span
+      title={decisionHint(entry)}
       className={cx(
         "inline-flex h-[18px] shrink-0 items-center rounded-full px-1.5 text-[11px] font-medium",
-        TONE_CLASS[DECISION_TONE[decision]],
+        TONE_CLASS[DECISION_TONE[entry.decision]],
         className,
       )}
     >
-      {DECISION_LABEL[decision]}
+      {DECISION_LABEL[entry.decision]}
     </span>
   );
 }
@@ -82,7 +83,7 @@ export function ActivityDetail({ entry }: { entry: AuditEntry | undefined }) {
       <header className="flex shrink-0 items-start gap-2 border-b border-border px-4 py-2">
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
-            <DecisionBadge decision={entry.decision} />
+            <DecisionBadge entry={entry} />
             <h2 className="selectable truncate text-[13px] font-semibold text-fg" title={title}>
               {title}
             </h2>
@@ -140,7 +141,7 @@ export function ActivityDetail({ entry }: { entry: AuditEntry | undefined }) {
           </Field>
           <Field label="Decision">
             <span className="text-fg">{DECISION_LABEL[entry.decision]}</span>
-            <span className="text-muted"> · {DECISION_HINT[entry.decision]}</span>
+            <span className="text-muted"> · {decisionHint(entry)}</span>
           </Field>
           <Field label="Client">
             <span className="flex flex-wrap items-center gap-x-2">
@@ -172,7 +173,13 @@ export function ActivityDetail({ entry }: { entry: AuditEntry | undefined }) {
             </Field>
           )}
           <Field label="Approval wait">
-            {entry.approvalWaitMs !== null ? <Value>{formatDuration(entry.approvalWaitMs)}</Value> : <None />}
+            {entry.approvalWaitMs !== null ? (
+              <Value>{formatDuration(entry.approvalWaitMs)}</Value>
+            ) : isUnasked(entry) ? (
+              <span className="text-fg">Not asked</span>
+            ) : (
+              <None />
+            )}
           </Field>
           <Field label="Elapsed">{entry.elapsedMs !== null ? <Value>{formatDuration(entry.elapsedMs)}</Value> : <None />}</Field>
           <Field label="Returned">

@@ -10,7 +10,7 @@ import {
   ContextMenuTrigger,
 } from "../ui/ContextMenu";
 import { Notice } from "../ui/Notice";
-import { Button, cx, IconButton, Segmented, StatusDot } from "../ui/primitives";
+import { Button, cx, IconButton, Segmented, StatusDot, Switch } from "../ui/primitives";
 import { useNow } from "../ui/useNow";
 import { useVault } from "../vault/store";
 import type { McpClient } from "./api";
@@ -26,6 +26,7 @@ import {
   revokeClient,
   selectClient,
   setAccess,
+  setApproval,
   showClientActivity,
   useMcp,
 } from "./store";
@@ -248,11 +249,9 @@ function ClientDetail({ client, now }: { client: McpClient; now: number }) {
           </Notice>
         )}
         <section className="flex flex-col gap-2">
-          <SectionTitle
-            title="Access"
-            hint="Clients use the vault that is open. Every change they propose waits for your approval."
-          />
+          <SectionTitle title="Access" hint="Clients use the vault that is open, and change notes only where they may write." />
           <GrantsMatrix client={client} />
+          <ApprovalSetting client={client} />
         </section>
         {!revoked && port !== null && (
           <section className="flex flex-col gap-2">
@@ -278,11 +277,45 @@ function SectionTitle({ title, hint }: { title: string; hint: string }) {
 }
 
 const LEVEL_LABEL: Record<GrantLevel, string> = { none: "None", read: "Read", write: "Write" };
-const LEVEL_TITLE: Record<GrantLevel, string> = {
-  none: "No access: the client doesn't see this vault",
-  read: "Read: search and read every note",
-  write: "Write: read, and propose changes you approve one by one",
-};
+const levelTitle = (level: GrantLevel, client: McpClient): string =>
+  ({
+    none: "No access: the client doesn't see this vault",
+    read: "Read: search and read every note",
+    write: client.changesNeedApproval
+      ? "Write: read, and propose changes you approve one by one"
+      : "Write: read, and change notes without asking you",
+  })[level];
+
+/** Whether each change of the client waits for the user's approval. */
+function ApprovalSetting({ client }: { client: McpClient }) {
+  const [busy, setBusy] = useState(false);
+  const asks = client.changesNeedApproval;
+  const change = async (ask: boolean) => {
+    setBusy(true);
+    await setApproval(client.id, ask);
+    setBusy(false);
+  };
+
+  return (
+    <div className="flex items-center gap-3 rounded-md border border-border px-3 py-2">
+      <div className="min-w-0 flex-1">
+        <div className="text-[12.5px] text-fg">Ask before each change</div>
+        <p className={cx("text-[11.5px]", asks ? "text-subtle" : "text-warning")}>
+          {asks
+            ? "Each change it proposes waits for you to approve it, with the difference in front."
+            : "Its changes are made at once, without asking you. Each one is still in the activity log, and what it replaced in Local History."}
+        </p>
+      </div>
+      <Switch
+        label="Ask before each change"
+        checked={asks}
+        // A revoked client may go back to asking, never stop.
+        disabled={busy || (!!client.revokedAt && asks)}
+        onCheckedChange={(ask) => void change(ask)}
+      />
+    </div>
+  );
+}
 
 /** The vaults the user opened, and how to hear about new ones: opening another puts it here. */
 function useRecents(): RecentVault[] {
@@ -348,7 +381,7 @@ function GrantRow({ client, vault }: { client: McpClient; vault: VaultRow }) {
           options={(["none", "read", "write"] as const).map((level) => ({
             value: level,
             label: LEVEL_LABEL[level],
-            title: LEVEL_TITLE[level],
+            title: levelTitle(level, client),
             // A revoked client may lose access, never gain any.
             blocked: client.revokedAt && level !== "none" ? "Its token was revoked" : null,
             selectedClassName: level === "write" ? "text-warning" : level === "none" ? "text-muted" : undefined,

@@ -1,5 +1,6 @@
-import type { Action, ApprovalRequest, Decision, Transport, Warning } from "./api";
+import type { Action, ApprovalRequest, AuditEntry, Decision, Transport, Warning } from "./api";
 import { displayName } from "../vault/paths";
+import { isUnasked } from "./activity";
 
 /** What a client wants to do, as the approval dialog's title says it. */
 const WANTS: Record<Action, string> = {
@@ -44,7 +45,7 @@ export const DECISION_TONE: Record<Decision, "neutral" | "success" | "danger" | 
 };
 
 /** What a decision meant for the call, in the Activity detail. */
-export const DECISION_HINT: Record<Decision, string> = {
+const DECISION_HINT: Record<Decision, string> = {
   allowed: "Ran without asking: reading needs no approval.",
   approved: "Approved in Itztli.",
   rejected: "Rejected in Itztli: the change was not made.",
@@ -52,6 +53,13 @@ export const DECISION_HINT: Record<Decision, string> = {
   timeout: "Nobody answered in time: the change was not made.",
   withdrawn: "Withdrawn while it waited for approval: the client gave up, lost its access or the server stopped.",
 };
+
+/** What a row's decision meant for its call. */
+export function decisionHint(entry: Pick<AuditEntry, "tool" | "decision">): string {
+  return isUnasked(entry) ? UNASKED_HINT : DECISION_HINT[entry.decision];
+}
+
+const UNASKED_HINT = "Not asked: this client's changes did not need your approval.";
 
 /** How a client reached the server. */
 export const TRANSPORT_LABEL: Record<Transport, string> = {
