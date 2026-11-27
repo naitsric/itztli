@@ -41,6 +41,9 @@ pub struct Link {
     pub subpath: Option<String>,
     /// The text shown instead of the target, when the link sets one.
     pub display: Option<String>,
+    /// For a property link, the property it is the value of: `author` in
+    /// `author: "[[Ana]]"`, and the top-level key for one nested deeper.
+    pub relation: Option<String>,
     pub line: u32,
     pub col: u32,
     /// UTF-16 length up to the end of the link or of its first line.

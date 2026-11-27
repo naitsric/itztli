@@ -227,6 +227,32 @@ async fn describes_notes_tags_tasks_and_problems() {
 }
 
 #[tokio::test]
+async fn describes_how_notes_relate() {
+    let (test, caller) = setup(Access::Read).await;
+    test.write(&[("Work/Sync.md", "---\ntype: meeting\nattendees: [\"[[Plan]]\"]\n---\nAbout [[Plan]].\n")]);
+    test.until(|| test.backend().workspace().unwrap().index().note("Work/Sync.md").is_some()).await;
+    let sync = read!(test, &caller, DescribeNote, json!({ "path": "Work/Sync.md" })).unwrap();
+    assert_eq!(sync["type"], "meeting");
+    assert_eq!(
+        sync["links"],
+        json!([
+            { "target": "Plan", "path": "Work/Plan.md", "relation": "attendees", "line": 3 },
+            { "target": "Plan", "path": "Work/Plan.md", "line": 5 },
+        ])
+    );
+    let plan = read!(test, &caller, DescribeNote, json!({ "path": "Plan" })).unwrap();
+    assert_eq!(plan.get("type"), None);
+    assert_eq!(
+        plan["backlinks"],
+        json!([
+            { "path": "Home.md", "line": 7, "text": "See [[Plan]] and [[Nowhere]]." },
+            { "path": "Work/Sync.md", "line": 3, "text": "attendees: [\"[[Plan]]\"]", "relation": "attendees" },
+            { "path": "Work/Sync.md", "line": 5, "text": "About [[Plan]]." },
+        ])
+    );
+}
+
+#[tokio::test]
 async fn nothing_is_changed_without_write_access() {
     let (test, caller) = setup(Access::Read).await;
     let create = CreateNote { vault: vault(), path: "New.md".into(), text: "x".into(), reason: None };

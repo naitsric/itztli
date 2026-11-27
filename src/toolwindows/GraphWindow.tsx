@@ -5,12 +5,13 @@ import { api, type Graph } from "../backend/api";
 import { useDocuments } from "../editor/documents";
 import { token, useTheme } from "../theme";
 import { inputClass } from "../ui/Modal";
-import { cx, IconButton, Segmented } from "../ui/primitives";
+import { cx, FilterSelect, IconButton, Segmented } from "../ui/primitives";
 import { useElementSize } from "../ui/useElementSize";
 import { useVault } from "../vault/store";
 import { openPath, useEditorArea } from "../workbench/editorArea";
 import { ToolWindowHeader } from "../workbench/ToolWindowPane";
 import { hideToolWindow } from "../workbench/toolWindows";
+import { arrowHead, graphColors, graphShape, relationFocus } from "./graphModel";
 import type { FromWorker, ToWorker } from "./graphWorker";
 import { useQuery } from "./useQuery";
 
@@ -20,14 +21,6 @@ interface Camera {
   zoom: number;
 }
 
-const HUES = [212, 160, 35, 280, 340, 95, 190, 15, 250, 60];
-
-function tagColor(tag: string, dark: boolean): string {
-  const top = tag.split("/")[0]!.toLowerCase();
-  const hash = [...top].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
-  return `hsl(${HUES[hash % HUES.length]} ${dark ? "60% 64%" : "62% 45%"})`;
-}
-
 export function GraphWindow() {
   const path = useEditorArea((s) => s.activePath);
   const content = useVault((s) => s.content);
@@ -35,11 +28,18 @@ export function GraphWindow() {
   const [scope, setScope] = useState<"note" | "vault">("note");
   const [depth, setDepth] = useState(2);
   const [filter, setFilter] = useState("");
+  const [relation, setRelation] = useState<string | null>(null);
   const around = scope === "note" ? path : null;
   const graph = useQuery<Graph>(
-    () => (scope === "note" && !path ? Promise.resolve({ nodes: [], edges: [] }) : api.graph({ around: around ?? undefined, depth, missing: scope === "note" })),
+    () =>
+      scope === "note" && !path
+        ? Promise.resolve({ nodes: [], edges: [], relations: [] })
+        : api.graph({ around: around ?? undefined, depth, missing: scope === "note" }),
     [scope, around, depth, content, saved],
   );
+  const relations = graph?.relations ?? [];
+  // Kept for when it is there again, as around another note.
+  const shown = relations.some((r) => r.name === relation) ? relation : null;
 
   return (
     <>
@@ -56,6 +56,15 @@ export function GraphWindow() {
               onChange={(e) => setFilter(e.target.value)}
             />
           </label>
+          {relations.length > 0 && (
+            <FilterSelect
+              label="Relation"
+              all="All links"
+              value={shown}
+              options={relations.map((r) => ({ value: r.name, label: r.name }))}
+              onChange={setRelation}
+            />
+          )}
           {scope === "note" && (
             <Segmented
               label="Depth"
@@ -76,7 +85,7 @@ export function GraphWindow() {
         </div>
       </ToolWindowHeader>
       {graph && graph.nodes.length > 0 ? (
-        <GraphCanvas graph={graph} active={path} filter={filter} />
+        <GraphCanvas graph={graph} active={path} filter={filter} relation={shown} />
       ) : (
         <p className="px-4 py-3 text-[12.5px] text-subtle">{graph && "Open a note to see what it is linked with."}</p>
       )}
@@ -84,7 +93,10 @@ export function GraphWindow() {
   );
 }
 
-function GraphCanvas({ graph, active, filter }: { graph: Graph; active: string | null; filter: string }) {
+/** Arrow heads are drawn from this zoom in, and always on what is highlighted. */
+const ARROWS_FROM_ZOOM = 0.6;
+
+function GraphCanvas({ graph, active, filter, relation }: { graph: Graph; active: string | null; filter: string; relation: string | null }) {
   const { ref: sizeRef, width, height } = useElementSize<HTMLDivElement>();
   const canvas = useRef<HTMLCanvasElement>(null);
   const worker = useRef<Worker | null>(null);
@@ -96,36 +108,21 @@ function GraphCanvas({ graph, active, filter }: { graph: Graph; active: string |
   const frame = useRef(0);
   const theme = useTheme();
 
-  const degree = useMemo(() => {
-    const counts = new Uint16Array(graph.nodes.length);
-    for (const [a, b] of graph.edges) {
-      counts[a]!++;
-      counts[b]!++;
-    }
-    return counts;
-  }, [graph]);
-  const near = useMemo(() => {
-    const map = new Map<number, Set<number>>();
-    for (const [a, b] of graph.edges) {
-      (map.get(a) ?? map.set(a, new Set()).get(a)!).add(b);
-      (map.get(b) ?? map.set(b, new Set()).get(b)!).add(a);
-    }
-    return map;
-  }, [graph]);
-  const colors = useMemo(() => {
-    const dark = theme.appearance === "dark";
-    return graph.nodes.map((n) => (n.tag ? tagColor(n.tag, dark) : null));
-  }, [graph, theme]);
+  const shape = useMemo(() => graphShape(graph), [graph]);
+  const chosen = useMemo(() => (relation ? relationFocus(graph, relation) : null), [graph, relation]);
+  const dark = theme.appearance === "dark";
+  const { nodes: colors, types } = useMemo(() => graphColors(graph, dark), [graph, dark]);
 
-  const radius = (i: number) => 3.2 + Math.min(9, Math.sqrt(degree[i]!) * 1.35);
+  const latest = useRef({ graph, active, filter, shape, chosen, colors, width, height });
+  latest.current = { graph, active, filter, shape, chosen, colors, width, height };
 
-  const latest = useRef({ graph, active, filter, near, colors, width, height });
-  latest.current = { graph, active, filter, near, colors, width, height };
+  // The layout's ticks draw with the first render's functions: what they use is read from `latest`.
+  const radius = (i: number) => 3.2 + Math.min(9, Math.sqrt(latest.current.shape.near[i]?.size ?? 0) * 1.35);
 
   const draw = () => {
     frame.current = 0;
     const context = canvas.current?.getContext("2d");
-    const { graph: g, active: current, filter: wanted, near: neighbors, colors: hues, width: w, height: h } = latest.current;
+    const { graph: g, active: current, filter: wanted, shape: s, chosen: only, colors: hues, width: w, height: h } = latest.current;
     const at = positions.current;
     if (!context || at.length !== g.nodes.length * 2 || w === 0) return;
     const ratio = window.devicePixelRatio || 1;
@@ -135,32 +132,53 @@ function GraphCanvas({ graph, active, filter }: { graph: Graph; active: string |
     context.setTransform(ratio * zoom, 0, 0, ratio * zoom, ratio * (w / 2 + x), ratio * (h / 2 + y));
 
     const focus = hovered.current;
-    const lit = focus === null ? null : (neighbors.get(focus) ?? new Set<number>());
+    const lit = focus === null ? null : s.near[focus]!;
     const query = wanted.trim().toLowerCase();
     const matches = (i: number) => !query || g.nodes[i]!.name.toLowerCase().includes(query);
-    const faded = (i: number) => (lit !== null && i !== focus && !lit.has(i)) || !matches(i);
+    const faded = (i: number) =>
+      i !== focus && ((lit !== null && !lit.has(i)) || !matches(i) || (only !== null && !only.nodes.has(i)));
+    // What is on screen, in the graph's coordinates, with room for a name.
+    const left = (-w / 2 - x) / zoom - 60 / zoom;
+    const right = (w / 2 - x) / zoom + 60 / zoom;
+    const top = (-h / 2 - y) / zoom - 20 / zoom;
+    const bottom = (h / 2 - y) / zoom + 20 / zoom;
+    const onScreen = (i: number) => at[i * 2]! >= left && at[i * 2]! <= right && at[i * 2 + 1]! >= top && at[i * 2 + 1]! <= bottom;
+
+    /** Some edges (all of them for `null`), and the arrow heads saying which way they go. */
+    const edges = (which: readonly number[] | null, arrows: boolean) => {
+      const count = which ? which.length : g.edges.length;
+      context.beginPath();
+      for (let k = 0; k < count; k++) {
+        const [a, b] = g.edges[which ? which[k]! : k]!;
+        context.moveTo(at[a * 2]!, at[a * 2 + 1]!);
+        context.lineTo(at[b * 2]!, at[b * 2 + 1]!);
+      }
+      context.stroke();
+      if (!arrows) return;
+      context.beginPath();
+      for (let k = 0; k < count; k++) {
+        const [a, b] = g.edges[which ? which[k]! : k]!;
+        if (!onScreen(b)) continue;
+        const head = arrowHead(at[a * 2]!, at[a * 2 + 1]!, at[b * 2]!, at[b * 2 + 1]!, radius(b) + 1 / zoom, 6 / zoom);
+        if (!head) continue;
+        context.moveTo(head[0]!, head[1]!);
+        context.lineTo(head[2]!, head[3]!);
+        context.lineTo(head[4]!, head[5]!);
+        context.closePath();
+      }
+      context.fill();
+    };
 
     const edgeColor = token("border-strong");
     const accent = token("accent");
     context.lineWidth = 1 / zoom;
-    context.strokeStyle = edgeColor;
-    context.globalAlpha = lit || query ? 0.25 : 0.75;
-    context.beginPath();
-    for (const [a, b] of g.edges) {
-      context.moveTo(at[a * 2]!, at[a * 2 + 1]!);
-      context.lineTo(at[b * 2]!, at[b * 2 + 1]!);
-    }
-    context.stroke();
-    if (focus !== null) {
-      context.globalAlpha = 0.9;
-      context.strokeStyle = accent;
-      context.beginPath();
-      for (const n of lit!) {
-        context.moveTo(at[focus * 2]!, at[focus * 2 + 1]!);
-        context.lineTo(at[n * 2]!, at[n * 2 + 1]!);
-      }
-      context.stroke();
-    }
+    context.strokeStyle = context.fillStyle = edgeColor;
+    context.globalAlpha = only ? 0.15 : lit || query ? 0.25 : 0.75;
+    edges(null, zoom >= ARROWS_FROM_ZOOM);
+    context.globalAlpha = 0.9;
+    context.strokeStyle = context.fillStyle = accent;
+    if (only) edges(only.edges, true);
+    if (focus !== null) edges(s.incident[focus]!, true);
 
     const plain = token("fg-muted");
     const missing = token("fg-subtle");
@@ -180,22 +198,48 @@ function GraphCanvas({ graph, active, filter }: { graph: Graph; active: string |
 
     // Names of what matters at this distance; all of them up close.
     const textColor = token("fg");
+    const font = token("font-ui");
     context.textAlign = "center";
     context.textBaseline = "top";
     context.fillStyle = textColor;
     const size = 11.5 / zoom;
-    context.font = `${size}px ${token("font-ui")}`;
+    context.font = `${size}px ${font}`;
     const few = g.nodes.length <= 60;
     g.nodes.forEach((node, i) => {
-      const important = i === focus || lit?.has(i) || node.id === current || (!!query && matches(i));
-      const visible = important || few || zoom > 1.5 || (zoom > 0.7 && degree[i]! > 6);
-      if (!visible || (faded(i) && !important)) return;
-      const px = at[i * 2]! * zoom + w / 2 + x;
-      const py = at[i * 2 + 1]! * zoom + h / 2 + y;
-      if (px < -60 || py < -20 || px > w + 60 || py > h + 20) return;
+      const important = i === focus || lit?.has(i) || node.id === current || (!!query && matches(i)) || !!only?.nodes.has(i);
+      const visible = important || few || zoom > 1.5 || (zoom > 0.7 && s.near[i]!.size > 6);
+      if (!visible || (faded(i) && !important) || !onScreen(i)) return;
       context.globalAlpha = important ? 1 : Math.min(1, Math.max(0.35, zoom - 0.35));
       context.fillText(node.name.length > 32 ? `${node.name.slice(0, 31)}…` : node.name, at[i * 2]!, at[i * 2 + 1]! + radius(i) + 3 / zoom);
     });
+
+    // What the hovered note's links are, where they say.
+    if (focus !== null) {
+      const said = new Map<number, Set<string>>();
+      for (const e of s.incident[focus]!) {
+        if (!s.names[e]) continue;
+        const [a, b] = g.edges[e]!;
+        const other = a === focus ? b : a;
+        const names = said.get(other) ?? said.set(other, new Set()).get(other)!;
+        s.names[e].forEach((name) => names.add(name));
+      }
+      context.globalAlpha = 1;
+      context.textBaseline = "middle";
+      context.font = `${10.5 / zoom}px ${font}`;
+      context.lineWidth = 3 / zoom;
+      context.lineJoin = "round";
+      context.strokeStyle = token("bg-panel");
+      context.fillStyle = plain;
+      for (const [other, names] of said) {
+        const [ax, ay, bx, by] = [at[focus * 2]!, at[focus * 2 + 1]!, at[other * 2]!, at[other * 2 + 1]!];
+        const text = [...names].join(", ");
+        // Only on an edge long enough to hold it: zoom in to read the rest.
+        const room = Math.hypot(bx - ax, by - ay) - radius(focus) - radius(other) - 6 / zoom;
+        if (context.measureText(text).width > room) continue;
+        context.strokeText(text, (ax + bx) / 2, (ay + by) / 2);
+        context.fillText(text, (ax + bx) / 2, (ay + by) / 2);
+      }
+    }
     context.globalAlpha = 1;
   };
 
@@ -251,15 +295,15 @@ function GraphCanvas({ graph, active, filter }: { graph: Graph; active: string |
     });
     hovered.current = null;
     fitted.current = false;
-    const message: ToWorker = { kind: "graph", count: graph.nodes.length, edges: graph.edges, positions: any ? known : null };
+    const message: ToWorker = { kind: "graph", count: graph.nodes.length, edges: shape.pairs, positions: any ? known : null };
     worker.current?.postMessage(message);
-  }, [graph]);
+  }, [graph, shape]);
 
   useEffect(() => {
     if (!fitted.current) fitRef.current();
     redraw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [width, height, theme, active, filter]);
+  }, [width, height, theme, active, filter, chosen]);
 
   const toGraph = (clientX: number, clientY: number): [number, number] => {
     const box = canvas.current!.getBoundingClientRect();
@@ -361,6 +405,18 @@ function GraphCanvas({ graph, active, filter }: { graph: Graph; active: string |
       >
         <Maximize className="size-3.5" />
       </IconButton>
+      {types.length > 0 && (
+        <ul aria-label="Types" className="pointer-events-none absolute bottom-2 left-2 rounded-md bg-panel/85 px-2 py-1 text-[11px] text-muted">
+          {types.slice(0, 8).map(({ name, count, color }) => (
+            <li key={name} className="flex h-4 items-center gap-1.5">
+              <span className="size-2 shrink-0 rounded-full" style={{ background: color }} />
+              {name}
+              <span className="text-subtle tabular-nums">{count}</span>
+            </li>
+          ))}
+          {types.length > 8 && <li className="h-4 text-subtle">{types.length - 8} more</li>}
+        </ul>
+      )}
     </div>
   );
 }

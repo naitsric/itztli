@@ -84,7 +84,7 @@ The whole API, documented, is
 | `ctx.contextActions` | entries of ⌥⏎ |
 | `ctx.fileViewers` | showing other kinds of files |
 | `ctx.vault` | reading, writing, moving, hearing of changes |
-| `ctx.notes` | what notes say: links, backlinks, tags, tasks, search |
+| `ctx.notes` | what notes say: links (and the property each is in), backlinks, type, tags, tasks, search |
 | `ctx.workspace` | what is open, opening things |
 | `ctx.ui` | notifications, questions, status bar, menus, styles |
 | `ctx.themes` | themes, as changes to the app's colors |

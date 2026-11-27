@@ -175,4 +175,40 @@ export function Segmented<T extends string>({
   );
 }
 
+/** One filter, as a compact select; tinted while it narrows what is shown. */
+export function FilterSelect({
+  label,
+  all,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  all: string;
+  value: string | null;
+  options: readonly { value: string; label: string }[];
+  onChange: (value: string | null) => void;
+}) {
+  return (
+    <select
+      aria-label={label}
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
+      className={cx(
+        "h-6 max-w-40 min-w-0 shrink rounded-md border px-1 text-[12px] outline-none focus:border-accent",
+        value === null
+          ? "border-transparent bg-transparent text-muted hover:border-border"
+          : "border-accent/40 bg-accent-soft text-fg",
+      )}
+    >
+      <option value="">{all}</option>
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 export { cx };

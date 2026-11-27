@@ -184,7 +184,10 @@ mod tests {
                         new.target
                     );
                 }
-                assert_eq!((&old.subpath, &old.display, old.kind), (&new.subpath, &new.display, new.kind));
+                assert_eq!(
+                    (&old.subpath, &old.display, &old.relation, old.kind),
+                    (&new.subpath, &new.display, &new.relation, new.kind)
+                );
             }
         }
         texts
@@ -207,6 +210,17 @@ mod tests {
         );
         assert_eq!(t["b.md"], "---\nup: \"[[New name]]\"\n---\n[[Older]]");
         assert_eq!(t["New name.md"], "[[New name#Me]] [[New name]]");
+    }
+
+    #[test]
+    fn links_in_properties_follow_at_any_depth() {
+        let note = |name: &str| {
+            format!(
+                "---\nauthor: \"[[{name}]]\"\nattendees:\n  - \"[[{name}|A]]\"\nproject:\n  lead: [\"[[{name}#Bio]]\"]\n---\n"
+            )
+        };
+        let t = moved(&[("Ana.md", "# Bio"), ("m.md", &note("Ana"))], "Ana.md", "People/Ana María.md");
+        assert_eq!(t["m.md"], note("Ana María"));
     }
 
     #[test]

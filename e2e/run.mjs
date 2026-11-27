@@ -268,6 +268,19 @@ test("shows structure, tags, problems and the graph", async (app, u) => {
   await app.tab.getByRole("tree", { name: "Vault" }).waitFor({ state: "hidden" });
 }, { fill: files({ "a.md": "# First\n\n## Second\n\n#project/x [[nowhere]]\n" }) });
 
+test("shows how notes relate, by their properties", async (app, u) => {
+  await u.open("Ana", "Ana.md");
+  await u.key("Mod+4");
+  const backlinks = app.tab.getByRole("tree", { name: "Backlinks" });
+  await backlinks.getByRole("treeitem", { name: /^author/ }).waitFor();
+  await backlinks.getByRole("treeitem", { name: /^Kickoff/ }).first().waitFor();
+  await backlinks.getByText("Then Ana spoke").waitFor();
+  await u.key("Mod+8");
+  await app.tab.getByLabel("Graph of 2 notes and 1 links").waitFor();
+  await app.tab.getByRole("list", { name: "Types" }).getByText("meeting").waitFor();
+  await app.tab.getByLabel("Relation").selectOption("author");
+}, { fill: files({ "Ana.md": "---\ntype: person\n---\n", "Kickoff.md": "---\ntype: meeting\nauthor: \"[[Ana]]\"\n---\nThen [[Ana]] spoke\n" }) });
+
 // ── Not losing anything ────────────────────────────────────────────────────
 
 test("takes changes made elsewhere", async (app, u) => {

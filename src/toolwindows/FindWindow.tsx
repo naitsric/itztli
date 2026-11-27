@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useFindResults } from "../search/findState";
 import { ToolWindowHeader } from "../workbench/ToolWindowPane";
 import { hideToolWindow } from "../workbench/toolWindows";
-import { usageGroups } from "./BacklinksWindow";
+import { usageGroups } from "./usages";
 import { Excerpted, UsageTree, type PlaceGroup } from "./UsageTree";
 
 /** The results of a search, kept in view while one goes through them. */

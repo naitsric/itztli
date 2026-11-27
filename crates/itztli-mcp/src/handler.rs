@@ -35,8 +35,9 @@ const LIST_NOTES: &str = "List notes, with their title, tags and length: those i
                           looks like `name`; all of them without filters. Sort by `modified` for the latest ones.";
 const READ_NOTE: &str = "Read a note's Markdown, whole or only a `section` (a heading with everything under it), up to \
                          64 KB at a time; `truncated` says there is more. The `revision` identifies what it says now.";
-const DESCRIBE_NOTE: &str = "Describe a note without its text: title, aliases, tags, properties (frontmatter), headings, \
-                             links, backlinks (which notes link to it, with the line) and tasks.";
+const DESCRIBE_NOTE: &str = "Describe a note without its text: title, type, aliases, tags, properties (frontmatter), \
+                             headings, links, backlinks (which notes link to it, with the line) and tasks. A link in a \
+                             property, `author: \"[[Ana]]\"`, says how the notes relate: its `relation` is `author`.";
 const LIST_TAGS: &str = "List every tag in the vault and how many notes have it.";
 const LIST_TASKS: &str = "List tasks (`- [ ]` and `- [x]`) across the vault, in a folder or in a note. Open ones unless \
                           `status` says otherwise.";

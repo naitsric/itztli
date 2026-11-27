@@ -74,6 +74,8 @@ export interface Link {
   target: string;
   subpath: string | null;
   display: string | null;
+  /** For a link in a property, the property: `author` in `author: "[[Ana]]"`. */
+  relation: string | null;
   line: number;
   col: number;
   len: number;
@@ -87,6 +89,8 @@ export interface Heading {
 
 export interface NoteMeta {
   title: string | null;
+  /** Its `type` property. */
+  type: string | null;
   frontmatter: Record<string, unknown> | null;
   invalidFrontmatter: boolean;
   aliases: string[];
@@ -174,8 +178,11 @@ export interface Problem {
 }
 
 export interface Graph {
-  nodes: { id: string; name: string; missing: boolean; tag: string | null }[];
+  nodes: { id: string; name: string; missing: boolean; type: string | null; tag: string | null }[];
+  /** `[from, to]`, indices into `nodes`, once per way. */
   edges: [number, number][];
+  /** The edges properties make, by the property's name; indices into `edges`. */
+  relations: { name: string; edges: number[] }[];
 }
 
 export interface RelinkedNote {
