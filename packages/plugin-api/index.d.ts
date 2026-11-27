@@ -285,8 +285,13 @@ declare module "@itztli/plugin-api" {
   export interface Notes {
     /** `null` for what is not a note. */
     meta(path: string): Promise<NoteMeta | null>;
-    /** Notes that link to one, with the line of each link. */
-    backlinks(path: string): Promise<{ path: string; links: { line: number; col: number; context: string }[] }[]>;
+    /**
+     * Notes that link to one, with the line of each link, and the property
+     * it is in for one in the frontmatter (`author: "[[This note]]"`).
+     */
+    backlinks(
+      path: string,
+    ): Promise<{ path: string; links: { line: number; col: number; context: string; relation: string | null }[] }[]>;
     /** The file a link in `source` leads to, or `null`. */
     resolve(target: string, source: string): Promise<string | null>;
     /** What to write in a wiki link from `source` to reach `path`. */
@@ -304,11 +309,23 @@ declare module "@itztli/plugin-api" {
 
   export interface NoteMeta {
     title: string | null;
+    /** Its `type` property: what the note is, `meeting`, `person`… */
+    type: string | null;
     frontmatter: Record<string, unknown> | null;
     aliases: string[];
     tags: { name: string; line: number; col: number }[];
     headings: { level: number; text: string; line: number }[];
-    links: { kind: string; target: string; subpath: string | null; display: string | null; line: number; col: number; len: number }[];
+    /** `relation` is the property a link in the frontmatter is in: `author` in `author: "[[Ana]]"`. */
+    links: {
+      kind: string;
+      target: string;
+      subpath: string | null;
+      display: string | null;
+      relation: string | null;
+      line: number;
+      col: number;
+      len: number;
+    }[];
     tasks: { done: boolean; text: string; line: number }[];
     words: number;
   }

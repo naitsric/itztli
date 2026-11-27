@@ -417,6 +417,16 @@ mod tests {
     }
 
     #[test]
+    fn backlinks_say_which_property_links() {
+        let mut i = index(&[("m.md", "---\nauthor: \"[[ana]]\"\nteam:\n  lead: \"[[ana]]\"\n---\nWith [[ana]].")]);
+        let relations = |found: Vec<Backlink>| found[0].links.iter().map(|l| l.relation.clone()).collect::<Vec<_>>();
+        let expected = [Some("author".to_owned()), Some("team".to_owned()), None];
+        assert_eq!(relations(i.mentions_of_missing("ana")), expected);
+        i.put(entry("ana.md"), Some(itztli_core::parse("")));
+        assert_eq!(relations(i.backlinks("ana.md")), expected);
+    }
+
+    #[test]
     fn removing_a_folder_removes_what_it_holds() {
         let mut i = index(&[("f/", ""), ("f/a.md", "[[t]]"), ("f/g/", ""), ("f/g/b.md", "[[t]]"), ("fx.md", ""), ("t.md", "")]);
         assert_eq!(i.backlinks("t.md").len(), 2);

@@ -304,6 +304,9 @@ async fn serves_the_tools_to_clients_of_either_lifecycle() {
         assert!(input["properties"]["query"]["description"].as_str().unwrap().contains("accents"), "{input}");
         let output = Json::Object(search.output_schema.as_deref().unwrap().clone());
         assert!(output["properties"]["truncated"]["description"].is_string(), "{output}");
+        let describe = tools.iter().find(|t| t.name == "describe_note").unwrap();
+        let output = Json::Object(describe.output_schema.as_deref().unwrap().clone());
+        assert!(output["properties"]["type"]["description"].is_string(), "{output}");
         client.cancel().await.unwrap();
     }
 }

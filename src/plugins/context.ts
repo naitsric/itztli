@@ -297,7 +297,7 @@ export function createContext({ manifest, data, save, token, onError }: Options)
       backlinks: async (path) =>
         (await api.usages(path)).map((u) => ({
           path: u.path,
-          links: u.links.map((l) => ({ line: l.line, col: l.col, context: l.context })),
+          links: u.links.map((l) => ({ line: l.line, col: l.col, context: l.context, relation: l.relation })),
         })),
       resolve: (target, source) => api.linkResolve(source, target),
       linkText: (path, source) => api.linkText(source, path),

@@ -17,7 +17,7 @@ import {
   ContextMenuTrigger,
 } from "../ui/ContextMenu";
 import { formatDuration } from "../ui/format";
-import { Button, cx, IconButton, Kbd } from "../ui/primitives";
+import { Button, cx, FilterSelect, IconButton, Kbd } from "../ui/primitives";
 import { useElementSize } from "../ui/useElementSize";
 import { useNow } from "../ui/useNow";
 import { Splitter } from "../workbench/Splitter";
@@ -332,42 +332,6 @@ function SearchField({ inputRef, onLeave }: { inputRef: RefObject<HTMLInputEleme
       />
       {text === "" && <Kbd binding="$mod+KeyF" />}
     </label>
-  );
-}
-
-/** One filter, as a compact select; tinted while it narrows the log. */
-function FilterSelect({
-  label,
-  all,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  all: string;
-  value: string | null;
-  options: Option[];
-  onChange: (value: string | null) => void;
-}) {
-  return (
-    <select
-      aria-label={label}
-      value={value ?? ""}
-      onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
-      className={cx(
-        "h-6 max-w-40 min-w-0 shrink rounded-md border px-1 text-[12px] outline-none focus:border-accent",
-        value === null
-          ? "border-transparent bg-transparent text-muted hover:border-border"
-          : "border-accent/40 bg-accent-soft text-fg",
-      )}
-    >
-      <option value="">{all}</option>
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
   );
 }
 

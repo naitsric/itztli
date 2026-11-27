@@ -7,6 +7,7 @@ use serde::Serialize;
 use serde_json::{Map, Value};
 
 use crate::link::{self, Link, LinkKind};
+use crate::path;
 use crate::text::Lines;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
@@ -14,6 +15,8 @@ use crate::text::Lines;
 pub struct NoteMeta {
     /// `title` in the frontmatter, else the first level-1 heading.
     pub title: Option<String>,
+    /// What the note is, as its `type` property says: `meeting`, `person`…
+    pub r#type: Option<String>,
     /// `None` when there is no frontmatter or it is not a valid YAML mapping.
     pub frontmatter: Option<Map<String, Value>>,
     /// Whether the note opens a frontmatter block that does not parse.
@@ -106,6 +109,7 @@ fn read_frontmatter(text: &str, range: Range<usize>, lines: &Lines, meta: &mut N
     match serde_saphyr::from_str::<Value>(yaml) {
         Ok(Value::Object(map)) => {
             meta.title = map.get("title").and_then(scalar).filter(|t| !t.is_empty());
+            meta.r#type = map.get("type").and_then(note_type);
             for key in ["aliases", "alias"] {
                 meta.aliases.extend(map.get(key).map(|v| list(v, ',')).unwrap_or_default());
             }
@@ -125,6 +129,8 @@ fn read_frontmatter(text: &str, range: Range<usize>, lines: &Lines, meta: &mut N
         _ => meta.invalid_frontmatter = !yaml.trim().is_empty(),
     }
 
+    // Worked out at the first link: most frontmatter has none.
+    let mut properties: Option<Vec<(usize, Option<&str>)>> = None;
     let mut from = range.start;
     while let Some(open) = text[from..range.end].find("[[").map(|at| from + at) {
         let inner = open + 2;
@@ -133,9 +139,71 @@ fn read_frontmatter(text: &str, range: Range<usize>, lines: &Lines, meta: &mut N
             from = inner;
             continue;
         };
-        meta.links.extend(wiki_link(text, open..close + 2, inner..close, LinkKind::Property, lines));
+        let properties = properties.get_or_insert_with(|| property_lines(yaml, meta.frontmatter.as_ref()));
+        let line = properties.partition_point(|(start, _)| *start <= open - range.start) - 1;
+        let relation = properties[line].1.map(str::to_owned);
+        let link = wiki_link(text, open..close + 2, inner..close, LinkKind::Property, lines);
+        meta.links.extend(link.map(|l| Link { relation, ..l }));
         from = close + 2;
     }
+}
+
+/// The property each line of the frontmatter belongs to, by where the line
+/// starts: the last top-level key above it, if the YAML has that key.
+/// Comments belong to none; the text of a block (`notes: |`) is no comment.
+fn property_lines<'a>(yaml: &str, map: Option<&'a Map<String, Value>>) -> Vec<(usize, Option<&'a str>)> {
+    let mut found = Vec::new();
+    let mut current = None;
+    // While in a block, the indentation of the line that opened it.
+    let mut block: Option<usize> = None;
+    let mut start = 0;
+    for line in yaml.split_inclusive('\n') {
+        let text = line.trim();
+        let indent = line.len() - line.trim_start().len();
+        if block.is_some_and(|opened| text.is_empty() || indent > opened) {
+            found.push((start, current));
+        } else if text.starts_with('#') {
+            found.push((start, None));
+            block = None;
+        } else {
+            if let Some((key, _)) = top_level_key(line.trim_end()).and_then(|k| map?.get_key_value(k)) {
+                current = Some(key.as_str());
+            }
+            found.push((start, current));
+            let header = text.split_whitespace().next_back().unwrap_or("");
+            let opens = header.starts_with(['|', '>']) && header[1..].chars().all(|c| matches!(c, '+' | '-' | '1'..='9'));
+            block = opens.then_some(indent);
+        }
+        start += line.len();
+    }
+    found
+}
+
+/// The key a line of YAML opens at the top level: `author` in
+/// `author: "[[Ana]]"`, `my key` in `"my key": x`.
+fn top_level_key(line: &str) -> Option<&str> {
+    let item = |marker| line == marker || line.strip_prefix(marker).is_some_and(|rest| rest.starts_with(char::is_whitespace));
+    let key = if let Some(quote) = line.chars().next().filter(|c| matches!(c, '"' | '\'')) {
+        let close = line[1..].find(quote)? + 1;
+        line[close + 1..].trim_start().starts_with(':').then(|| &line[1..close])?
+    } else if line.starts_with(|c: char| c.is_whitespace() || "#[]{},|>!&*%@`".contains(c)) || item("-") || item("?") {
+        return None;
+    } else {
+        let (colon, _) = line.match_indices(':').find(|(at, _)| line[at + 1..].chars().next().is_none_or(char::is_whitespace))?;
+        line[..colon].trim_end()
+    };
+    (!key.is_empty()).then_some(key)
+}
+
+/// What `type: meeting` says a note is. A link names a note: `"[[Person]]"`
+/// is `Person`.
+fn note_type(value: &Value) -> Option<String> {
+    let text = scalar(value)?;
+    let text = match text.strip_prefix("[[").and_then(|t| t.strip_suffix("]]")) {
+        Some(inner) => path::link_name(link::split_target(link::split_wiki(inner).0).0).to_owned(),
+        None => text,
+    };
+    (!text.is_empty()).then_some(text)
 }
 
 /// A YAML scalar as text. Numbers and dates count: `title: 2026` is a title.
@@ -284,6 +352,7 @@ fn read_link(text: &str, range: Range<usize>, link_type: LinkType, url: &CowStr,
         target: link::percent_decode(target),
         subpath: subpath.map(link::percent_decode),
         display,
+        relation: None,
         line,
         col,
         len: link::first_line_len(source),
@@ -303,6 +372,7 @@ fn wiki_link(text: &str, range: Range<usize>, inner: Range<usize>, kind: LinkKin
         target: target.to_owned(),
         subpath: subpath.map(str::to_owned),
         display: display.filter(|d| !d.is_empty()).map(str::to_owned),
+        relation: None,
         line,
         col,
         len: link::first_line_len(&text[range]),
@@ -374,6 +444,60 @@ mod tests {
         assert_eq!((meta.links[0].target.as_str(), meta.links[0].line), ("Home", 6));
         assert_eq!(meta.headings[0].line, 8);
         assert!(!meta.invalid_frontmatter);
+    }
+
+    #[test]
+    fn property_links_know_their_property() {
+        let text = "---\nauthor: \"[[Ana]]\"\nattendees: [\"[[Ana]]\", \"[[Luis|L]]\"]\nteam:\n  - \"[[Eva]]\"\nflat:\n- \"[[Max]]\"\n\
+                    # old: \"[[Bob]]\"\n- \"[[Kim]]\"\nproject:\n  lead: \"[[Leo]]\"\nat: 10:30 [[Day]]\n\"my key\": \"[[Q]]\"\n\
+                    about: >\n  with [[Zoe]]\n---\n[[Body]]\n";
+        let meta = parse(text);
+        let found: Vec<(&str, Option<&str>)> = meta.links.iter().map(|l| (l.target.as_str(), l.relation.as_deref())).collect();
+        assert_eq!(
+            found,
+            [
+                ("Ana", Some("author")),
+                ("Ana", Some("attendees")),
+                ("Luis", Some("attendees")),
+                ("Eva", Some("team")),
+                ("Max", Some("flat")),
+                ("Bob", None),
+                ("Kim", Some("flat")),
+                ("Leo", Some("project")),
+                ("Day", Some("at")),
+                ("Q", Some("my key")),
+                ("Zoe", Some("about")),
+                ("Body", None),
+            ]
+        );
+        // Where they are is what it was without relations.
+        let luis = &meta.links[2];
+        assert_eq!((luis.line, luis.col, luis.len, &text[luis.dest.clone().unwrap()]), (2, 24, 10, "Luis"));
+    }
+
+    #[test]
+    fn only_keys_the_yaml_has_name_relations() {
+        let relations = |text: &str| parse(text).links.into_iter().map(|l| l.relation).collect::<Vec<_>>();
+        assert_eq!(relations("---\nup: \"[[A]]\n---\n"), [None], "it does not parse");
+        assert_eq!(relations("---\n# [[A]]\n---\n"), [None]);
+        let some = |key: &str| Some(key.to_owned());
+        let block = "---\nnotes: |-\n  # About [[A]]\n\n  # [[B]]\n# [[C]]\nlist:\n  # [[D]]\n  - \"[[E]]\"\n---\n";
+        assert_eq!(relations(block), [some("notes"), some("notes"), None, None, some("list")]);
+        // What looks like a key, inside a value that goes on for lines, is not one.
+        assert_eq!(relations("---\nup: [x,\nnot: \"[[A]]\"]\n---\n"), [some("up")]);
+        assert_eq!(relations("---\nup: \"first\nnot: [[A]]\"\n---\n"), [some("up")]);
+        assert_eq!(relations("---\n2026: \"[[A]]\"\n---\n"), [some("2026")]);
+    }
+
+    #[test]
+    fn the_type_is_a_property() {
+        let kind = |text: &str| parse(text).r#type;
+        assert_eq!(kind("---\ntype: meeting\n---\n").as_deref(), Some("meeting"));
+        assert_eq!(kind("---\ntype: \"[[People/Person|p]]\"\n---\n").as_deref(), Some("Person"));
+        assert_eq!(kind("---\ntype: [a, b]\n---\n"), None);
+        assert_eq!(kind("---\ntype: ''\n---\n"), None);
+        assert_eq!(kind("type: meeting"), None);
+        assert_eq!(serde_json::to_value(parse("---\ntype: x\n---\n")).unwrap()["type"], "x");
     }
 
     #[test]

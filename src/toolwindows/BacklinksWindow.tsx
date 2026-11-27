@@ -2,24 +2,14 @@ import { useMemo } from "react";
 import { plural } from "../actions";
 import { api, type Usages } from "../backend/api";
 import { useDocuments } from "../editor/documents";
-import { plainText } from "../editor/outline";
 import { displayName } from "../vault/paths";
 import { useVault } from "../vault/store";
 import { useEditorArea } from "../workbench/editorArea";
 import { ToolWindowHeader } from "../workbench/ToolWindowPane";
 import { hideToolWindow } from "../workbench/toolWindows";
-import { UsageTree, type PlaceGroup } from "./UsageTree";
+import { UsageTree } from "./UsageTree";
+import { usageGroups } from "./usages";
 import { useQuery } from "./useQuery";
-
-export function usageGroups(usages: readonly Usages[]): PlaceGroup[] {
-  return usages.map(({ path, links }) => ({
-    path,
-    places: links.map((link) => {
-      const text = plainText(link.context.replace(/^\s*(?:[-*+]|\d+[.)]|>|#{1,6})\s+(?:\[[ xX]\]\s+)?/, ""));
-      return { line: link.line, col: link.col, label: text, content: text };
-    }),
-  }));
-}
 
 /** Where the note in front is linked from. */
 export function BacklinksWindow() {

@@ -433,6 +433,9 @@ pub struct DescribeNoteOutput {
     pub path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    /// What the note is, as its `type` property says.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub r#type: Option<String>,
     pub aliases: Vec<String>,
     pub tags: Vec<String>,
     /// Its YAML frontmatter.
@@ -469,6 +472,10 @@ pub struct LinkEntry {
     /// Where it leads; absent when nothing is there.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+    /// The property it is in, which names how the notes relate:
+    /// `author` for `author: "[[Ana]]"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relation: Option<String>,
     pub line: u32,
 }
 
@@ -479,6 +486,10 @@ pub struct BacklinkEntry {
     pub line: u32,
     /// The line the link is on.
     pub text: String,
+    /// The property of that note the link is in: `author` when it says
+    /// `author: "[[This note]]"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relation: Option<String>,
 }
 
 impl ReadTool for DescribeNote {
@@ -507,6 +518,7 @@ impl ReadTool for DescribeNote {
                         None => l.target.clone(),
                     },
                     path: index.resolve_link(&p, l).map(str::to_owned),
+                    relation: l.relation.clone(),
                     line: l.line + 1,
                 })
                 .collect();
@@ -519,7 +531,12 @@ impl ReadTool for DescribeNote {
             .into_iter()
             .flat_map(|from| {
                 let path = from.path;
-                from.links.into_iter().map(move |u| BacklinkEntry { path: path.clone(), line: u.link.line + 1, text: u.context })
+                from.links.into_iter().map(move |u| BacklinkEntry {
+                    path: path.clone(),
+                    line: u.link.line + 1,
+                    text: u.context,
+                    relation: u.link.relation,
+                })
             })
             .collect();
         let truncated = links.len() > MAX_LINKS || backlinks.len() > MAX_LINKS;
@@ -528,6 +545,7 @@ impl ReadTool for DescribeNote {
         let done = meta.tasks.iter().filter(|t| t.done).count();
         let output = DescribeNoteOutput {
             title: meta.title.clone(),
+            r#type: meta.r#type.clone(),
             aliases: meta.aliases.clone(),
             tags: tags_of(&meta),
             properties: meta.frontmatter.clone(),

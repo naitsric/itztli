@@ -17,6 +17,21 @@ Type `[[` and start writing a name. A link can point at a heading, like
 - **Quick documentation**: rest the pointer on a link, or press F1, to read the
   note without leaving.
 
+## Properties
+
+In a note's properties, its frontmatter, a link says how two notes relate, and
+`type` says what the note is:
+
+```yaml
+type: meeting
+author: "[[Ana]]"
+attendees: ["[[Ana]]", "[[Luis]]"]
+```
+
+Ana's Backlinks then list this note under **author** and **attendees**. The
+**Graph** (⌘8) draws each link as an arrow, highlights one relation at a time,
+and colors notes by their type.
+
 ## Embeds
 
 An exclamation mark shows the note in place:
