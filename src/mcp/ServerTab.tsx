@@ -29,9 +29,10 @@ export function ServerTab() {
         <div className="flex items-start gap-2 rounded-md bg-inset px-3 py-2 text-[12px] text-muted">
           <ShieldAlert className="mt-px size-3.5 shrink-0 text-warning" />
           <p>
-            Clients only see the vaults you give them access to, and every change waits for your approval. What they read
-            may leave this computer: an assistant sends it to the service behind it. Notes can also hold text written to
-            mislead an assistant, so look at what a change does, not only at its reason.
+            Clients only see the vaults you give them access to, and their changes wait for your approval unless you turn
+            that off for one in Clients. What they read may leave this computer: an assistant sends it to the service
+            behind it. Notes can also hold text written to mislead an assistant, so look at what a change does, not only at
+            its reason.
           </p>
         </div>
       </div>

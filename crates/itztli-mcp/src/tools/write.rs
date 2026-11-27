@@ -44,18 +44,17 @@ impl Plan {
         Ok(Self { before, after, revision, warnings, ..Self::new(Action::Edit, path) })
     }
 
-    /// Makes the change. The error is for the model.
-    pub(super) fn make(self, workspace: &Workspace) -> Result<ChangeOutput, String> {
+    /// Makes the change; `approved` once the user did. The error is for
+    /// the model.
+    pub(super) fn make(self, workspace: &Workspace, approved: bool) -> Result<ChangeOutput, String> {
+        let meanwhile = if approved { "while the change waited for approval" } else { "before the change could be made" };
         let failed = |e: CommandError| match e.code {
-            ErrorCode::Conflict => format!(
-                "'{}' changed while the change waited for approval, so it was not made. Read it again and propose the \
-                 change anew.",
-                self.path
-            ),
-            ErrorCode::NotFound => {
-                format!("'{}' went away while the change waited for approval, so it was not made.", self.path)
+            ErrorCode::Conflict => {
+                format!("'{}' changed {meanwhile}, so it was not made. Read it again and propose the change anew.", self.path)
             }
-            _ => format!("The change was approved, but it could not be made: {}", e.message),
+            ErrorCode::NotFound => format!("'{}' went away {meanwhile}, so it was not made.", self.path),
+            _ if approved => format!("The change was approved, but it could not be made: {}", e.message),
+            _ => format!("The change could not be made: {}", e.message),
         };
         let mut output = ChangeOutput { path: self.path.clone(), ..ChangeOutput::default() };
         match self.action {
@@ -176,7 +175,7 @@ pub struct CreateNote {
     pub path: String,
     /// The note's Markdown.
     pub text: String,
-    /// Why, shown to the user who approves it.
+    /// Why, for the user: shown when they approve the change, and in Itztli's activity log.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 }
@@ -228,7 +227,7 @@ pub struct EditNote {
     /// Made in order, each on what the one before left.
     #[schemars(length(min = 1))]
     pub edits: Vec<TextEdit>,
-    /// Why, shown to the user who approves it.
+    /// Why, for the user: shown when they approve the change, and in Itztli's activity log.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 }
@@ -301,7 +300,7 @@ pub struct AppendToNote {
     /// Add it at the end of this section (`Heading`, `Heading#Subheading`) rather than of the note.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub section: Option<String>,
-    /// Why, shown to the user who approves it.
+    /// Why, for the user: shown when they approve the change, and in Itztli's activity log.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 }
@@ -365,7 +364,7 @@ pub struct ReplaceNote {
     pub text: String,
     /// The `revision` read_note gave, so nobody's change made since is lost.
     pub revision: String,
-    /// Why, shown to the user who approves it.
+    /// Why, for the user: shown when they approve the change, and in Itztli's activity log.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 }
@@ -414,7 +413,7 @@ pub struct MoveNote {
     pub path: String,
     /// Its new path, to rename it or move it: `Archive/Note.md`; or a folder that exists, with a `/` at the end.
     pub to: String,
-    /// Why, shown to the user who approves it.
+    /// Why, for the user: shown when they approve the change, and in Itztli's activity log.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 }
@@ -466,7 +465,7 @@ pub struct DeleteNote {
     /// The `revision` read_note gave, to delete it only if it still says the same.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revision: Option<String>,
-    /// Why, shown to the user who approves it.
+    /// Why, for the user: shown when they approve the change, and in Itztli's activity log.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 }

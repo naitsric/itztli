@@ -811,6 +811,44 @@ test("makes no change of an MCP client that nobody answers", async (app, u, call
   },
 });
 
+test("lets an MCP client change notes without asking, until asked again", async (app, u, call) => {
+  await u.key("Mod+9");
+  const window = app.tab.locator("[data-tool-window=mcp]");
+  await window.getByRole("radio", { name: "Clients" }).click();
+  const ask = window.getByRole("switch", { name: "Ask before each change" });
+  assert.equal(await ask.getAttribute("aria-checked"), "true");
+  await ask.click();
+  await app.until("it to stop asking", async () => (await ask.getAttribute("aria-checked")) === "false");
+  await window.getByText("Its changes are made at once").waitFor();
+  await ask.scrollIntoViewIfNeeded();
+  await app.shot("mcp-unasked");
+
+  const created = await call("create_note", { path: "New", text: "# New\n", reason: "You asked" });
+  assert.equal(created.path, "New.md");
+  assert.equal(u.on("New.md"), "# New\n");
+  assert.equal(await app.tab.getByRole("dialog").count(), 0, "nobody was asked");
+  await window.getByRole("radio", { name: "Activity" }).click();
+  await window.getByRole("listbox", { name: "MCP activity" }).getByRole("option", { name: /Allowed.*claude-code.*Create New.md/ }).click();
+  const detail = window.getByRole("region", { name: "Activity details" });
+  await detail.getByText("Not asked: this client's changes did not need your approval.").waitFor();
+  await detail.getByText("Not asked", { exact: true }).waitFor();
+
+  await window.getByRole("radio", { name: "Clients" }).click();
+  await ask.click();
+  await app.until("it to ask again", async () => (await ask.getAttribute("aria-checked")) === "true");
+  const edit = call("edit_note", { path: "New.md", edits: [{ oldText: "New", newText: "Old" }] });
+  const dialog = app.tab.getByRole("dialog", { name: "claude-code wants to change a note: New" });
+  await dialog.waitFor();
+  await dialog.getByRole("button", { name: "Reject" }).click();
+  assert.match((await edit).error, /^The user rejected this change/);
+  assert.equal(u.on("New.md"), "# New\n");
+  const log = await app.call("host", "mcp", { command: "audit", args: { filter: { limit: 2 } } });
+  assert.deepEqual(log.map((e) => [e.tool, e.decision, e.approvalWaitMs === null]), [
+    ["edit_note", "rejected", false],
+    ["create_note", "allowed", true],
+  ]);
+}, { prepare: connected });
+
 test("takes an MCP client's access away at once", async (app, u, call) => {
   await call("read_note", { path: "a.md" });
   await u.key("Mod+9");

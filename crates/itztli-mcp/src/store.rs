@@ -32,7 +32,8 @@ const MAX_PATH: usize = 1024;
 const MAX_SHORT: usize = 256;
 
 /// What a client may do in a vault. Changes also need the user's approval
-/// each time.
+/// each time, unless they let the client go without
+/// ([`McpClient::changes_need_approval`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Access {
@@ -67,6 +68,10 @@ pub struct McpClient {
     pub last_client_version: Option<String>,
     /// Set once revoked: its token no longer authenticates.
     pub revoked_at: Option<String>,
+    /// Whether each change it makes waits for the user's approval. True
+    /// unless the user turned that off for this client; never a reason to
+    /// change a vault it may only read.
+    pub changes_need_approval: bool,
     /// By vault name.
     pub grants: Vec<Grant>,
 }
@@ -220,15 +225,16 @@ impl Default for AuditFilter {
     }
 }
 
-const CLIENT_COLUMNS: &str =
-    "id, name, token_prefix, created_at, last_seen_at, last_client_name, last_client_version, revoked_at";
+const CLIENT_COLUMNS: &str = "id, name, token_prefix, created_at, last_seen_at, last_client_name, last_client_version, \
+    revoked_at, changes_need_approval";
 
 const AUDIT_COLUMNS: &str = "id, at, client_id, client_name, client_info_name, client_info_version, \
     protocol_version, transport, session_key, tool, vault_id, vault_name, path, detail, detail_truncated, reason, \
     decision, approval_wait_ms, elapsed_ms, count, truncated, error";
 
 /// Applied in order; `PRAGMA user_version` records how many ran. Only ever append.
-const MIGRATIONS: &[&str] = &["create table setting (
+const MIGRATIONS: &[&str] = &[
+    "create table setting (
         key text primary key,
         value text not null
     );
@@ -277,7 +283,10 @@ const MIGRATIONS: &[&str] = &["create table setting (
         error text
     );
     create index audit_by_client on audit (client_id, id);
-    create index audit_by_vault on audit (vault_id, id)"];
+    create index audit_by_vault on audit (vault_id, id)",
+    // Clients registered before keep asking.
+    "alter table client add column changes_need_approval integer not null default 1",
+];
 
 const NOW: &str = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
 
@@ -448,6 +457,14 @@ impl Store {
         Ok(client)
     }
 
+    /// Whether each change of the client waits for the user's approval.
+    /// None, and nothing changed, if there is no such client.
+    pub fn set_approval(&self, id: &str, required: bool) -> Result<Option<McpClient>> {
+        let db = self.db();
+        db.execute("update client set changes_need_approval = ?2 where id = ?1", params![id, required])?;
+        client_by_id(&db, id)
+    }
+
     /// The client can no longer use the vault.
     pub fn remove_grant(&self, client_id: &str, vault_id: &str) -> Result<Option<McpClient>> {
         let db = self.db();
@@ -578,6 +595,7 @@ fn client_row(row: &Row) -> rusqlite::Result<McpClient> {
         last_client_name: row.get(5)?,
         last_client_version: row.get(6)?,
         revoked_at: row.get(7)?,
+        changes_need_approval: row.get(8)?,
         grants: Vec::new(),
     })
 }
@@ -750,10 +768,44 @@ mod tests {
     }
 
     #[test]
+    fn approval_is_on_until_turned_off_per_client() {
+        let store = Store::in_memory().unwrap();
+        let a = store.create_client("a", &hash(1), "p", None).unwrap();
+        let b = store.create_client("b", &hash(2), "q", None).unwrap();
+        assert!(a.changes_need_approval && b.changes_need_approval);
+        assert!(!store.set_approval(&a.id, false).unwrap().unwrap().changes_need_approval);
+        assert!(store.client(&b.id).unwrap().unwrap().changes_need_approval, "only that client");
+        assert!(!store.client_by_token_hash(&hash(1)).unwrap().unwrap().changes_need_approval);
+        assert!(store.set_approval(&a.id, true).unwrap().unwrap().changes_need_approval);
+        assert_eq!(store.set_approval("nobody", false).unwrap(), None);
+    }
+
+    #[test]
     fn survives_reopening() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("mcp.db");
-        let id = Store::open(&file).unwrap().create_client("a", &hash(1), "p", None).unwrap().id;
-        assert_eq!(Store::open(&file).unwrap().client(&id).unwrap().unwrap().name, "a");
+        let store = Store::open(&file).unwrap();
+        let id = store.create_client("a", &hash(1), "p", None).unwrap().id;
+        store.set_approval(&id, false).unwrap();
+        drop(store);
+        let client = Store::open(&file).unwrap().client(&id).unwrap().unwrap();
+        assert_eq!((client.name.as_str(), client.changes_need_approval), ("a", false));
+    }
+
+    #[test]
+    fn clients_registered_before_approval_could_be_turned_off_still_ask() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("mcp.db");
+        {
+            // As Itztli 0.1.0 left it.
+            let db = Connection::open(&file).unwrap();
+            db.execute_batch(MIGRATIONS[0]).unwrap();
+            db.pragma_update(None, "user_version", 1).unwrap();
+            let insert =
+                "insert into client (id, name, token_hash, token_prefix, created_at) values ('old', 'old', ?1, 'p', 'x')";
+            db.execute(insert, [&hash(1)]).unwrap();
+        }
+        let store = Store::open(&file).unwrap();
+        assert!(store.client("old").unwrap().unwrap().changes_need_approval);
     }
 }

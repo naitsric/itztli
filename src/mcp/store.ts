@@ -286,6 +286,20 @@ export async function setAccess(clientId: string, vaultId: string, access: Acces
   }
 }
 
+/**
+ * Whether each change of a client waits for the user's approval. Not asking
+ * takes the user's word, asked by the system; asking again counts from the
+ * client's next call.
+ */
+export async function setApproval(clientId: string, required: boolean) {
+  try {
+    const client = await mcpApi.setApproval(clientId, required);
+    if (client) replaceClient(client);
+  } catch (e) {
+    notifyError(e, "Whether the client's changes need approval could not be changed");
+  }
+}
+
 // Activity
 
 const setLog = (change: (log: ActivityLog) => ActivityLog) =>

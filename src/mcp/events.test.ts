@@ -12,6 +12,7 @@ const client = (id: string): McpClient => ({
   lastClientName: null,
   lastClientVersion: null,
   revokedAt: null,
+  changesNeedApproval: true,
   grants: [],
 });
 

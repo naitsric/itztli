@@ -8,12 +8,13 @@ vi.mock("./api", () => ({
     createClient: vi.fn(),
     rotateClient: vi.fn(),
     setAccess: vi.fn(),
+    setApproval: vi.fn(),
     deleteClient: vi.fn(),
   },
 }));
 
 const { mcpApi } = await import("./api");
-const { createClient, replaceToken, saveSettings, setAccess, useMcp } = await import("./store");
+const { createClient, replaceToken, saveSettings, setAccess, setApproval, useMcp } = await import("./store");
 
 const settings: McpSettings = { enabled: false, port: 7413, maxResults: 100, approvalTimeoutSecs: 120 };
 const client: McpClient = {
@@ -25,6 +26,7 @@ const client: McpClient = {
   lastClientName: null,
   lastClientVersion: null,
   revokedAt: null,
+  changesNeedApproval: true,
   grants: [],
 };
 
@@ -46,11 +48,13 @@ describe("when the user says no to the system's question", () => {
     expect(useMcp.getState()).toMatchObject({ clients: [client], dialog: { kind: "newClient" } });
   });
 
-  it("access and token stay as they were", async () => {
+  it("access, approval and token stay as they were", async () => {
     vi.mocked(mcpApi.setAccess).mockResolvedValue(null);
+    vi.mocked(mcpApi.setApproval).mockResolvedValue(null);
     vi.mocked(mcpApi.rotateClient).mockResolvedValue(null);
     useMcp.setState({ dialog: null });
     await setAccess("c1", "v1", "write");
+    await setApproval("c1", false);
     await replaceToken(client);
     expect(useMcp.getState()).toMatchObject({ clients: [client], dialog: null });
   });
@@ -75,5 +79,15 @@ describe("when the user agrees", () => {
     vi.mocked(mcpApi.setAccess).mockResolvedValue(granted);
     await setAccess("c1", "v1", "write");
     expect(useMcp.getState().clients).toEqual([granted]);
+  });
+
+  it("the client's changes stop waiting for approval, and wait again", async () => {
+    const unasked = { ...client, changesNeedApproval: false };
+    vi.mocked(mcpApi.setApproval).mockResolvedValueOnce(unasked).mockResolvedValueOnce(client);
+    await setApproval("c1", false);
+    expect(mcpApi.setApproval).toHaveBeenLastCalledWith("c1", false);
+    expect(useMcp.getState().clients).toEqual([unasked]);
+    await setApproval("c1", true);
+    expect(useMcp.getState().clients).toEqual([client]);
   });
 });

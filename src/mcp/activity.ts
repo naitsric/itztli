@@ -282,6 +282,13 @@ const WRITES = new Set(["create_note", "edit_note", "append_to_note", "replace_n
 
 export const isChange = (entry: Pick<AuditEntry, "tool">): boolean => WRITES.has(entry.tool);
 
+/**
+ * A change nobody was asked about: its client was let change notes without
+ * the user's approval. Changes are otherwise approved, or refused.
+ */
+export const isUnasked = (entry: Pick<AuditEntry, "tool" | "decision">): boolean =>
+  entry.decision === "allowed" && isChange(entry);
+
 /** A row's second line: what was done, to which note, and what was asked. */
 export function callSummary(entry: Pick<AuditEntry, "tool" | "path" | "detail">): { did: string; path: string | null; asked: string | null } {
   // What a change writes is for the detail, except where a note goes.

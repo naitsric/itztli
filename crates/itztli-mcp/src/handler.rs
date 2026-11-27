@@ -25,8 +25,9 @@ use crate::{
 };
 
 const LIST_VAULTS: &str = "List the vaults (folders of notes) the user lets this client use in Itztli: each one's id, \
-                           name, whether it is open, and whether changes may be proposed. Start here: the other tools \
-                           take a vault's id (or its name, when unique) as `vault`, and only the open one can be used.";
+                           name, whether it is open, whether this client may change notes in it, and whether each \
+                           change waits for the user's approval. Start here: the other tools take a vault's id (or its \
+                           name, when unique) as `vault`, and only the open one can be used.";
 const SEARCH_NOTES: &str = "Search the text of every note and return the matching lines. `mode` says how: `text` (as it \
                             is), `words` (notes that contain every word, anywhere) or `regex`. Case and accents are \
                             ignored unless `matchCase` is true. To find notes by name or tag, use list_notes.";
@@ -41,20 +42,23 @@ const LIST_TASKS: &str = "List tasks (`- [ ]` and `- [x]`) across the vault, in 
                           `status` says otherwise.";
 const LIST_PROBLEMS: &str = "List what is wrong in the vault, in a folder or in a note: links that lead nowhere and \
                              frontmatter that is not valid YAML.";
-const CREATE_NOTE: &str = "Create a note. The user must approve it in Itztli, so the call waits for them (2 minutes by \
-                           default) and they may reject it: pass `reason` to tell them why. Refused without asking \
-                           where this client may only read, as every change is.";
+const CREATE_NOTE: &str = "Create a note. Unless the user lets this client change notes without asking, they must \
+                           approve it in Itztli: the call waits for them (2 minutes by default), and they may reject it. \
+                           Pass `reason` to tell them why. Refused where this client may only read, as every change is.";
 const EDIT_NOTE: &str = "Change parts of a note: each edit replaces `oldText`, exactly as the note has it, with \
-                         `newText`. The user reviews the difference and must approve it in Itztli: pass `reason`.";
-const APPEND_TO_NOTE: &str = "Add text at the end of a note, or of one of its sections. The user must approve it in \
-                              Itztli: pass `reason`.";
+                         `newText`. The user reviews the difference, and approves it in Itztli unless they let this \
+                         client change notes without asking: pass `reason`.";
+const APPEND_TO_NOTE: &str = "Add text at the end of a note, or of one of its sections. The user approves it in Itztli \
+                              unless they let this client change notes without asking: pass `reason`.";
 const REPLACE_NOTE: &str = "Replace all of a note's text; prefer edit_note for changing parts. Takes the `revision` \
-                            read_note gave, and is refused if the note changed since. The user reviews the difference and \
-                            must approve it in Itztli: pass `reason`.";
-const MOVE_NOTE: &str = "Rename or move a note, and rewrite the links other notes have to it. The user must approve it in \
-                         Itztli: pass `reason`.";
+                            read_note gave, and is refused if the note changed since. The user reviews the difference, \
+                            and approves it in Itztli unless they let this client change notes without asking: pass \
+                            `reason`.";
+const MOVE_NOTE: &str = "Rename or move a note, and rewrite the links other notes have to it. The user approves it in \
+                         Itztli unless they let this client change notes without asking: pass `reason`.";
 const DELETE_NOTE: &str = "Move a note to the trash. Links to it are left leading nowhere: describe_note shows them as \
-                           backlinks. The user must approve it in Itztli: pass `reason`.";
+                           backlinks. The user approves it in Itztli unless they let this client change notes without \
+                           asking: pass `reason`.";
 
 /// What rmcp serves: one per session, or per request without one.
 #[derive(Clone)]

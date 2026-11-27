@@ -36,10 +36,14 @@ that are not this computer, and every request needs the token of a client you
 created; only its hash is kept. A client sees the vaults you gave it, only
 while they are open, and in them only notes: no attachments, no hidden folders.
 A change waits for you, with the difference in front, and is made on exactly
-what you saw or not at all. Every call is recorded.
+what you saw or not at all; unless you let that client change notes without
+asking, and then it is made at once, only where it may write. Every call is
+recorded, and the log tells changes you approved from those nobody was asked
+about.
 
-Turning the server on, giving a client access to a vault and making it a new
-token are asked in a native dialog, so a plugin can't do it for you.
+Turning the server on, giving a client access to a vault, making it a new token
+and letting it change notes without asking are asked in a native dialog, so a
+plugin can't do it for you. No tool lets a client change what it may do.
 
 ## What it does not
 

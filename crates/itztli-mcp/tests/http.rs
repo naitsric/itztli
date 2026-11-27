@@ -398,6 +398,27 @@ async fn an_approved_write_waits_for_the_user_and_reports_progress() {
 }
 
 #[tokio::test]
+async fn a_write_of_a_client_the_user_lets_go_without_asking_returns_at_once() {
+    for lifecycle in LIFECYCLES {
+        let env = Env::start().await;
+        let (caller, token) = env.test.client("claude", Some(Access::Write));
+        env.server.store().set_approval(&caller.client_id, false).unwrap();
+        let client = env.client(&token, lifecycle.clone()).await;
+
+        let arguments = json!({ "vault": "Notes", "path": "t.md", "edits": [{ "oldText": "a", "newText": "z" }] });
+        let result = tokio::time::timeout(Duration::from_secs(5), client.call_tool(call("edit_note", arguments)));
+        let result = result.await.expect("no wait for anyone").unwrap();
+        assert_eq!(result.is_error, Some(false), "{result:?}");
+        assert_eq!(env.test.on_disk("t.md").as_deref(), Some("z\nb\nc\n"));
+        let audit = env.test.events.last_audit();
+        assert_eq!((audit.decision, audit.approval_wait_ms), (Decision::Allowed, None), "{lifecycle:?}");
+        assert!(env.server.pending_approvals().is_empty());
+        assert!(client.service().progress.lock().unwrap().is_empty(), "nothing to wait for");
+        client.cancel().await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn refuses_requests_without_a_valid_token() {
     let env = Env::start().await;
     let (caller, token) = env.test.client("claude", None);

@@ -63,8 +63,8 @@ no format of its own: what you write is yours, and opens anywhere.
 - **An [MCP](#let-an-assistant-use-your-notes) server built in**: Claude Code,
   Claude Desktop, Cursor or any MCP client can search and read your notes, and
   propose changes to them.
-- **You approve every change**, seeing the difference first, and everything an
-  assistant did is on record.
+- **You approve every change**, seeing the difference first, unless you let a
+  client you trust go without. Everything an assistant did is on record.
 
 ### Keep
 - **Local History**: what every note said before, for 30 days, kept on your
@@ -176,8 +176,14 @@ a deletion breaks. Reject has the focus, Enter never approves, and typing that
 was meant for a note answers nothing. A change is made only on what you saw: if
 the note changed meanwhile, it isn't. What it said before stays in Local History.
 
+For a client you trust, turn off **Ask before each change** in the MCP tool
+window, under Clients. Itztli asks you once more; from then on its changes are
+made at once, in the vaults where it may write, and the log shows nobody was
+asked. Vaults it may only read stay that way. Turn it back on and its next
+change waits for you again.
+
 **See everything it did.** The MCP tool window (⌘9) lists every call as it
-happens: what was read, searched or proposed, by whom, and whether you let it.
+happens: what was read, searched or changed, by whom, and whether you let it.
 What calls returned is never stored. Revoking a client stops its token at once.
 
 **What an assistant reads may leave your computer**: it sends it to the service
